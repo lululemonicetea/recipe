@@ -214,3 +214,11 @@ body {
   padding: 13px 14px; border: 1px solid var(--border); border-radius: 10px; text-decoration: none; color: var(--text); font-size: 15px; }
 .coupang-row:hover { border-color: var(--brand); }
 .coupang-row .cta { color: var(--brand); font-weight: 700; font-size: 14px; white-space: nowrap; }
+
+/* 쿠팡 담기: 화면을 따라다니는 플로팅 버튼 */
+.cart-fab { position: fixed; right: 18px; bottom: 24px; z-index: 45; padding: 14px 22px; border: 0;
+  border-radius: 30px; font-size: 15px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  box-shadow: 0 6px 20px rgba(255,87,34,.45); cursor: pointer; }
+.cart-fab:active { transform: scale(.97); }
+@media (max-width: 640px) { .cart-fab { left: 14px; right: 14px; bottom: 84px; } }

@@ -304,6 +304,8 @@ function addIngredientsToCart(ing, src, mult) {
 
 function renderCart() {
   const list = $("#cartList");
+  const fab = document.getElementById("cartFab");
+  if (fab) { const n = cart.filter(c => c.done).length; fab.textContent = n ? `🛒 쿠팡에서 담기 (${n})` : "🛒 쿠팡에서 담기"; }
   list.innerHTML = "";
   if (cart.length === 0) { list.innerHTML = '<p class="muted">목록이 비어 있어요. 레시피에서 재료를 담아보세요.</p>'; return; }
   const groups = {};
@@ -368,7 +370,7 @@ async function openCoupang() {
     $("#modalBody").innerHTML = `<p class="note">⚠ ${esc(e.message)}</p>`;
   }
 }
-$("#cartCoupang").onclick = openCoupang;
+$("#cartFab").onclick = openCoupang;
 
 $("#cartAddBtn").onclick = () => {
   const v = $("#cartInput").value.trim(); if (!v) return;
