@@ -304,18 +304,27 @@ function addIngredientsToCart(ing, src, mult) {
 
 function renderCart() {
   const list = $("#cartList");
+  const remain = cart.filter(c => !c.done).length;
+  const done = cart.length - remain;
   const fab = document.getElementById("cartFab");
-  if (fab) { const n = cart.filter(c => c.done).length; fab.textContent = n ? `🛒 쿠팡에서 담기 (${n})` : "🛒 쿠팡에서 담기"; }
+  if (fab) fab.textContent = remain ? `🛒 남은 재료 담기 (${remain})` : "🛒 쿠팡에서 담기";
+  const sa = document.getElementById("cartSelectAll");
+  if (sa) sa.textContent = cart.length && remain === 0 ? "↺ 전체 해제" : "✓ 전체 완료";
   list.innerHTML = "";
   if (cart.length === 0) { list.innerHTML = '<p class="muted">목록이 비어 있어요. 레시피에서 재료를 담아보세요.</p>'; return; }
+  const pct = Math.round(done / cart.length * 100);
+  const prog = el("div", "cart-progress");
+  prog.innerHTML = `<div class="cart-progress-t"><span>준비완료 <b>${done}</b> · 남은 <b>${remain}</b></span><span>${pct}%</span></div><div class="cart-bar"><div style="width:${pct}%"></div></div>`;
+  list.appendChild(prog);
   const groups = {};
   cart.forEach(it => { const k = it.src || "직접추가"; (groups[k] = groups[k] || []).push(it); });
   Object.keys(groups).forEach(src => {
     const g = el("div", "cart-group");
-    g.innerHTML = `<div class="cart-group-h"><span>🍽 ${esc(src)}</span><span class="cart-group-n">${groups[src].length}</span></div>`;
+    const gd = groups[src].filter(i => i.done).length;
+    g.innerHTML = `<div class="cart-group-h"><span>🍽 ${esc(src)}</span><span class="cart-group-n">${gd}/${groups[src].length}</span></div>`;
     const ul = el("ul", "cart-list");
     groups[src].forEach(item => {
-      const li = el("li", item.done ? "sel" : "");
+      const li = el("li", item.done ? "done" : "");
       li.innerHTML = `
         <input type="checkbox" ${item.done ? "checked" : ""} data-check="${item.id}">
         <label>${esc(item.text)}</label>
@@ -327,7 +336,7 @@ function renderCart() {
   });
   list.querySelectorAll("[data-check]").forEach(cb => cb.onchange = () => {
     const it = cart.find(c => c.id === cb.dataset.check); if (it) it.done = cb.checked;
-    store.set("rt_cart", cart); renderCart();
+    store.set("rt_cart", cart); updateCounts(); renderCart();
   });
   list.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     cart = cart.filter(c => c.id !== b.dataset.del); store.set("rt_cart", cart); updateCounts(); renderCart();
@@ -342,10 +351,9 @@ $("#cartSelectAll").onclick = () => {
 
 // 쿠팡에서 재료 담기 (체크된 재료 → 쿠팡 파트너스 어필리에이트 링크)
 async function openCoupang() {
-  const chosen = cart.filter(c => c.done);
-  const items = chosen.length ? chosen : cart;
-  if (!items.length) return toast("담을 재료가 없어요");
-  const names = [...new Set(items.map(c => c.name || c.text))];
+  const remain = cart.filter(c => !c.done);
+  if (!remain.length) return toast("모든 재료가 준비됐어요 🎉");
+  const names = [...new Set(remain.map(c => c.name || c.text))];
   $("#modal").classList.remove("hidden"); document.body.style.overflow = "hidden";
   $("#modalBody").innerHTML = '<div style="text-align:center;padding:40px"><span class="spinner"></span><p class="muted">쿠팡 상품 링크를 준비하고 있어요…</p></div>';
   try {
@@ -358,14 +366,21 @@ async function openCoupang() {
       </a>`).join("");
     $("#modalBody").innerHTML = `
       <div class="recipe">
-        <h2>🛒 쿠팡에서 재료 담기</h2>
-        <p class="muted" style="font-size:13px;margin:2px 0 10px">재료를 눌러 쿠팡에서 인기 상품을 확인하고 장바구니에 담으세요.${data.tracked ? "" : "<br>· 쿠팡 파트너스 키를 넣으면 구매 시 수수료가 적립됩니다."}</p>
+        <h2>🛒 쿠팡에서 장보기</h2>
+        <p class="muted" style="font-size:13px;margin:2px 0 10px">쿠팡에 한 번 들어가면 <b>24시간 안에 담는 모든 상품</b>이 자동으로 집계돼요. 아래 버튼으로 시작한 뒤, 재료를 하나씩 검색해 담으세요.${data.tracked ? "" : "<br>· 쿠팡 파트너스 키를 넣으면 구매 시 수수료가 적립됩니다."}</p>
+        <div class="modal-cta" style="margin:0 0 12px">
+          <a class="cta-watch" href="${esc(data.items[0].url)}" target="_blank" rel="noopener nofollow sponsored">🛒 쿠팡에서 장보기 시작</a>
+          <button class="cta-cart" id="coupangCopy">📋 재료 목록 복사</button>
+        </div>
         <div class="coupang-list">${rows}</div>
-        <div class="modal-cta"><button class="cta-watch" id="coupangOpenAll">쿠팡에서 모두 열기</button></div>
         <div class="note" style="font-size:12px;margin-top:10px">이 앱은 쿠팡 파트너스 활동의 일환으로, 구매 발생 시 일정액의 수수료를 제공받을 수 있습니다.</div>
       </div>`;
-    const oa = $("#coupangOpenAll");
-    if (oa) oa.onclick = () => data.items.forEach(it => window.open(it.url, "_blank", "noopener"));
+    const cc = document.getElementById("coupangCopy");
+    if (cc) cc.onclick = async () => {
+      try { await navigator.clipboard.writeText(names.join("\n")); toast("재료 목록을 복사했어요 — 쿠팡에서 붙여넣어 검색하세요"); }
+      catch { toast("복사 실패 — 길게 눌러 복사해 주세요"); }
+    };
+
   } catch (e) {
     $("#modalBody").innerHTML = `<p class="note">⚠ ${esc(e.message)}</p>`;
   }
@@ -408,7 +423,7 @@ function renderHistory() {
 /* ---------- 공통 ---------- */
 function updateCounts() {
   $("#savedCount").textContent = saved.length;
-  $("#cartCount").textContent = cart.length;
+  $("#cartCount").textContent = cart.filter(c => !c.done).length;
 }
 function applyTheme() {
   document.documentElement.setAttribute("data-theme", theme);

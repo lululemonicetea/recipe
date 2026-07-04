@@ -222,3 +222,10 @@ body {
   box-shadow: 0 6px 20px rgba(255,87,34,.45); cursor: pointer; }
 .cart-fab:active { transform: scale(.97); }
 @media (max-width: 640px) { .cart-fab { left: 14px; right: 14px; bottom: 84px; } }
+
+/* 장보기 진행률 */
+.cart-progress { margin: 4px 2px 14px; }
+.cart-progress-t { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.cart-progress-t b { color: var(--text); }
+.cart-bar { height: 8px; background: var(--border); border-radius: 6px; overflow: hidden; }
+.cart-bar > div { height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); border-radius: 6px; transition: width .3s; }
