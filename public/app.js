@@ -10,6 +10,7 @@ let saved   = store.get("rt_saved", []);
 let history = store.get("rt_history", []);
 let cart    = store.get("rt_cart", []);
 let theme   = store.get("rt_theme", "light");
+let sumCache = store.get("rt_sum", {});
 
 /* ---------- 유틸 ---------- */
 const $ = s => document.querySelector(s);
@@ -177,6 +178,7 @@ function toggleStar(id, btn) {
       savedAt: Date.now(),
     });
     toast("⭐ 저장했어요! 다음에 비슷한 메뉴를 검색하면 맨 위에 나와요");
+    fetchSummary(id).catch(() => {});
   }
   store.set("rt_saved", saved);
   updateCounts();
@@ -197,15 +199,29 @@ function scaleAmount(amount, mult) {
 }
 const trim = n => (Math.round(n * 100) / 100).toString();
 
+function getSum(id) { const h = sumCache[id]; return h && (Date.now() - h.at < 86400000) ? h.data : null; }
+function putSum(id, data) {
+  sumCache[id] = { data, at: Date.now() };
+  const ks = Object.keys(sumCache);
+  if (ks.length > 120) { ks.sort((a, b) => sumCache[a].at - sumCache[b].at); delete sumCache[ks[0]]; }
+  store.set("rt_sum", sumCache);
+}
+async function fetchSummary(id) {
+  const c = getSum(id); if (c) return c;
+  const res = await fetch(`/api/summarize?videoId=${id}`);
+  const d = await res.json();
+  if (!res.ok) throw new Error(d.error || "요약 실패");
+  putSum(id, d);
+  return d;
+}
+
 async function openRecipe(id) {
   const v = lastResults.get(id);
   $("#modal").classList.remove("hidden");
   document.body.style.overflow = "hidden";
-  $("#modalBody").innerHTML = '<div style="text-align:center;padding:50px"><span class="spinner"></span><p class="muted">영상에서 재료·조리법을 정리하고 있어요…</p></div>';
+  $("#modalBody").innerHTML = '<div style="text-align:center;padding:50px"><span class="spinner"></span><p class="muted">영상을 보고 재료·조리법을 정리하고 있어요…</p></div>';
   try {
-    const res = await fetch(`/api/summarize?videoId=${id}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "요약 실패");
+    const data = await fetchSummary(id);
     data._url = v?.url || `https://www.youtube.com/watch?v=${id}`;
     data._id = id;
     modalState = { recipe: data, mult: 1 };
@@ -220,7 +236,7 @@ function recipeBodyHTML(d, m, opts = {}) {
   const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount));
   const steps = (d.steps || []).filter(Boolean);
   const tips = (d.tips || []).filter(Boolean);
-  const badge = d.source === "ai" ? '<span class="pill ai">AI 요약</span>' : '<span class="pill text">설명 기반</span>';
+  const badge = d.source === "ai-video" ? '<span class="pill ai">AI 영상 분석</span>' : d.source === "ai" ? '<span class="pill ai">AI 요약</span>' : '<span class="pill text">설명 기반</span>';
   const empty = !ing.length && !steps.length;
   const serv = opts.stepper && ing.length
     ? `<div class="serv">분량 <button data-mult="-1">－</button> <b>×${m}</b> <button data-mult="1">＋</button></div>` : "";
@@ -247,6 +263,7 @@ function recipeBodyHTML(d, m, opts = {}) {
     <div class="modal-cta">
       <a class="cta-watch" href="${esc(d._url || ("https://www.youtube.com/watch?v=" + (d.videoId || "")))}" target="_blank" rel="noopener">▶ 영상에서 보기</a>
       ${ing.length ? `<button class="cta-cart">🛒 재료 장보기 담기</button>` : ""}
+      ${ing.length ? `<button class="cta-coupang">🧾 쿠팡에서 재료 사기</button>` : ""}
     </div>`;
 }
 
@@ -260,14 +277,14 @@ function wireRecipe(scope, d, m, isModal) {
   const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount));
   const tc = scope.querySelector(".cta-cart");
   if (tc) tc.onclick = () => addIngredientsToCart(ing, d.dish, m);
+  const cp = scope.querySelector(".cta-coupang");
+  if (cp) cp.onclick = () => goCoupang(ing.map(i => i.item));
 }
 
 // 저장한 영상: 오른쪽에 레시피 자동 표시
 async function loadInlineRecipe(id, container) {
   try {
-    const res = await fetch(`/api/summarize?videoId=${id}`);
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || "요약 실패");
+    const d = await fetchSummary(id);
     d._url = (lastResults.get(id) || {}).url || `https://www.youtube.com/watch?v=${id}`;
     container.innerHTML = `<div class="recipe compact">${recipeBodyHTML(d, 1, { stepper: false })}</div>`;
     wireRecipe(container, d, 1, false);
@@ -385,7 +402,23 @@ async function openCoupang() {
     $("#modalBody").innerHTML = `<p class="note">⚠ ${esc(e.message)}</p>`;
   }
 }
-$("#cartFab").onclick = openCoupang;
+function goCoupang(names) {
+  names = [...new Set((names || []).filter(Boolean))];
+  if (!names.length) return toast("담을 재료가 없어요");
+  const w = window.open("about:blank", "_blank");
+  if (navigator.clipboard) navigator.clipboard.writeText(names.join("\n")).catch(() => {});
+  const fallback = `https://www.coupang.com/np/search?q=${encodeURIComponent(names[0])}`;
+  fetch(`/api/coupang?q=${encodeURIComponent(names.join("|"))}`)
+    .then(r => r.json())
+    .then(d => { const u = (d.items && d.items[0] && d.items[0].url) || fallback; if (w) w.location = u; else location.href = u; toast("쿠팡으로 이동 · 재료 목록을 복사했어요"); })
+    .catch(() => { if (w) w.location = fallback; });
+}
+$("#cartFab").onclick = () => {
+  const remain = cart.filter(c => !c.done);
+  if (!remain.length) return toast("모든 재료가 준비됐어요 🎉");
+  goCoupang(remain.map(c => c.name || c.text));
+};
+
 
 $("#cartAddBtn").onclick = () => {
   const v = $("#cartInput").value.trim(); if (!v) return;

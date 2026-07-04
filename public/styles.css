@@ -229,3 +229,7 @@ body {
 .cart-progress-t b { color: var(--text); }
 .cart-bar { height: 8px; background: var(--border); border-radius: 6px; overflow: hidden; }
 .cart-bar > div { height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); border-radius: 6px; transition: width .3s; }
+
+/* 레시피 내 쿠팡 버튼 */
+.cta-coupang { background: color-mix(in srgb, var(--brand) 12%, transparent) !important;
+  color: var(--brand) !important; border-color: transparent !important; }

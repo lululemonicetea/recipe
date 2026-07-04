@@ -106,6 +106,52 @@ function summarizeFromText(title, description) {
     ingredients: ingredients.slice(0, 40), steps: steps.slice(0, 30), tips: [] };
 }
 
+function parseDurSec(iso) {
+  const m = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(iso || "");
+  return (+(m?.[1] || 0)) * 3600 + (+(m?.[2] || 0)) * 60 + (+(m?.[3] || 0));
+}
+
+async function summarizeWithGeminiVideo(videoId, durSec) {
+  const key = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  const parts = [
+    { text: "이 요리 영상을 보고(화면 자막과 음성 모두 참고) 재료와 조리 순서를 정리하세요. 없으면 지어내지 말고 비워두세요. 한국어로 답하세요." },
+    { fileData: { fileUri: `https://www.youtube.com/watch?v=${videoId}` } },
+  ];
+  if (durSec > 720) parts[1].videoMetadata = { startOffset: "0s", endOffset: "720s" };
+  const body = { contents: [{ parts }], generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 } };
+  const r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error?.message || "Gemini 영상 요청 실패");
+  const text = (j?.candidates?.[0]?.content?.parts || []).map(p => p.text).join("").trim();
+  const data = safeJson(text.replace(/^```json\s*/i, "").replace(/```$/g, "").trim());
+  data.source = "ai-video";
+  return data;
+}
+
+const hasContent = d => (d.ingredients || []).some(i => i && (i.item || i.amount)) || (d.steps || []).length > 0;
+const isFull = d => (d.ingredients || []).some(i => i && (i.item || i.amount)) && (d.steps || []).length > 0;
+
+async function smartSummarize(videoId, title, description, tags, durSec) {
+  const videoOn = process.env.GEMINI_VIDEO !== "0";
+  const isShort = durSec > 0 && durSec <= 90;
+  if (isShort && videoOn) {
+    try { return await summarizeWithGeminiVideo(videoId, durSec); } catch {}
+  }
+  let data;
+  try {
+    const transcript = await getTranscript(videoId);
+    data = await summarizeWithGemini(title, description, tags, transcript);
+  } catch {
+    data = summarizeFromText(title, description);
+  }
+  if (videoOn && !isFull(data)) {
+    try { const v = await summarizeWithGeminiVideo(videoId, durSec); if (hasContent(v)) return v; } catch {}
+  }
+  return data;
+}
+
 export default async function handler(req, res) {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) return res.status(500).json({ error: "YOUTUBE_API_KEY가 설정되지 않았습니다." });
@@ -115,20 +161,15 @@ export default async function handler(req, res) {
   const hit = cache.get(videoId);
   if (hit && Date.now() - hit.at < TTL) return res.status(200).json(hit.data);
   try {
-    const vp = new URLSearchParams({ key, part: "snippet", id: videoId });
+    const vp = new URLSearchParams({ key, part: "snippet,contentDetails", id: videoId });
     const vJson = await (await fetch(`${YT}/videos?${vp}`)).json();
     const sn = vJson?.items?.[0]?.snippet;
     if (!sn) return res.status(404).json({ error: "영상을 찾을 수 없습니다." });
+    const durSec = parseDurSec(vJson?.items?.[0]?.contentDetails?.duration);
     const title = sn.title || "", description = sn.description || "", tags = (sn.tags || []).join(", ");
     let data;
     if (process.env.GEMINI_API_KEY) {
-      try {
-        const transcript = await getTranscript(videoId);
-        data = await summarizeWithGemini(title, description, tags, transcript);
-      } catch (e) {
-        data = summarizeFromText(title, description);
-        data.aiError = "AI 요약이 어려워 설명글 기준으로 보여드려요.";
-      }
+      data = await smartSummarize(videoId, title, description, tags, durSec);
     } else {
       data = summarizeFromText(title, description);
     }
