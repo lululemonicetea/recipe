@@ -46,6 +46,8 @@
       </div>
     </section>
 
+    <section id="home" class="home"></section>
+
     <section id="savedTop" class="saved-top hidden">
       <h2>⭐ 저장한 영상 <small>이 메뉴로 저장해둔 영상이에요</small></h2>
       <div class="grid" id="savedTopGrid"></div>
@@ -77,10 +79,12 @@
     </div>
     <div class="cart-actions">
       <button id="cartSelectAll" class="ghost">✓ 전체 완료</button>
+      <button id="cartCollapseAll" class="ghost">▾ 모두 접기</button>
     </div>
     <div id="cartList"></div>
     <div class="cart-actions">
       <button id="cartCopy" class="ghost">📋 복사</button>
+      <button id="cartShare" class="ghost">↗ 공유</button>
       <button id="cartClearChecked" class="ghost">✔ 완료 항목 삭제</button>
       <button id="cartClearAll" class="ghost danger">전체 비우기</button>
     </div>
@@ -95,9 +99,11 @@
     </div>
   </div>
 
+  <div id="cookMode" class="cook hidden"></div>
+
   <div id="toast" class="toast hidden"></div>
 
-  <footer class="foot">유튜브 데이터 · 재료/조리법 요약은 참고용이에요. 정확한 계량은 원본 영상을 확인하세요. 쿠팡 링크는 파트너스 활동의 일환으로 수수료를 받을 수 있습니다. · <b>빌드 v13</b></footer>
+  <footer class="foot">유튜브 데이터 · 재료/조리법 요약은 참고용이에요. 정확한 계량은 원본 영상을 확인하세요. 쿠팡 링크는 파트너스 활동의 일환으로 수수료를 받을 수 있습니다. · <b>빌드 v15</b></footer>
 
   <script src="/app.js"></script>
 </body>

@@ -11,6 +11,7 @@ let history = store.get("rt_history", []);
 let cart    = store.get("rt_cart", []);
 let theme   = store.get("rt_theme", "light");
 let sumCache = store.get("rt_sum2", {});
+let collapsed = store.get("rt_collapsed", {});
 
 /* ---------- 유틸 ---------- */
 const $ = s => document.querySelector(s);
@@ -55,7 +56,7 @@ function showView(name) {
   window.scrollTo(0, 0);
 }
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => showView(t.dataset.view));
-$("#brandHome").onclick = () => showView("search");
+$("#brandHome").onclick = goHome;
 
 /* ---------- 검색 ---------- */
 let lastResults = new Map();  // id -> video
@@ -69,6 +70,7 @@ async function doSearch(query, append = false) {
   if (!q) return;
   currentQuery = q;
   $("#q").value = q;
+  hideHome();
   if (!append) {
     lastResults.clear();
     $("#results").innerHTML = "";
@@ -224,6 +226,7 @@ async function fetchSummary(id) {
 
 async function openRecipe(id) {
   const v = lastResults.get(id);
+  trackRecent(v);
   $("#modal").classList.remove("hidden");
   document.body.style.overflow = "hidden";
   $("#modalBody").innerHTML = '<div style="text-align:center;padding:50px"><span class="spinner"></span><p class="muted">영상을 보고 재료·조리법을 정리하고 있어요…</p></div>';
@@ -270,8 +273,9 @@ function recipeBodyHTML(d, m, opts = {}) {
     ${tips.length ? `<div class="tips"><b>💡 팁</b><ul>${tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}
     <div class="modal-cta">
       <a class="cta-watch" href="${esc(d._url || ("https://www.youtube.com/watch?v=" + (d.videoId || "")))}" target="_blank" rel="noopener">▶ 영상에서 보기</a>
-      ${ing.length ? `<button class="cta-cart">🛒 재료 장보기 담기</button>` : ""}
-      ${ing.length ? `<button class="cta-coupang">🧾 쿠팡에서 재료 사기</button>` : ""}
+      ${steps.length ? `<button class="cta-cook">🍳 조리 시작</button>` : ""}
+      ${ing.length ? `<button class="cta-cart">🛒 장보기 담기</button>` : ""}
+      <button class="cta-share">↗ 공유</button>
     </div>`;
 }
 
@@ -285,8 +289,10 @@ function wireRecipe(scope, d, m, isModal) {
   const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount));
   const tc = scope.querySelector(".cta-cart");
   if (tc) tc.onclick = () => addIngredientsToCart(ing, d.dish, m);
-  const cp = scope.querySelector(".cta-coupang");
-  if (cp) cp.onclick = () => goCoupang(ing.map(i => i.item));
+  const ck = scope.querySelector(".cta-cook");
+  if (ck) ck.onclick = () => startCook(d);
+  const sh = scope.querySelector(".cta-share");
+  if (sh) sh.onclick = () => shareRecipe(d);
 }
 
 // 저장한 영상: 오른쪽에 레시피 자동 표시
@@ -335,28 +341,35 @@ function renderCart() {
   if (fab) fab.textContent = remain ? `🛒 남은 재료 담기 (${remain})` : "🛒 쿠팡에서 담기";
   const sa = document.getElementById("cartSelectAll");
   if (sa) sa.textContent = cart.length && remain === 0 ? "↺ 전체 해제" : "✓ 전체 완료";
+  const ca = document.getElementById("cartCollapseAll");
   list.innerHTML = "";
-  if (cart.length === 0) { list.innerHTML = '<p class="muted">목록이 비어 있어요. 레시피에서 재료를 담아보세요.</p>'; return; }
+  if (cart.length === 0) { list.innerHTML = '<p class="muted">목록이 비어 있어요. 레시피에서 재료를 담아보세요.</p>'; if (ca) ca.style.display = "none"; return; }
   const pct = Math.round(done / cart.length * 100);
   const prog = el("div", "cart-progress");
   prog.innerHTML = `<div class="cart-progress-t"><span>준비완료 <b>${done}</b> · 남은 <b>${remain}</b></span><span>${pct}%</span></div><div class="cart-bar"><div style="width:${pct}%"></div></div>`;
   list.appendChild(prog);
   const groups = {};
   cart.forEach(it => { const k = it.src || "직접추가"; (groups[k] = groups[k] || []).push(it); });
-  Object.keys(groups).forEach(src => {
+  const srcs = Object.keys(groups);
+  if (ca) { ca.style.display = srcs.length > 1 ? "" : "none"; ca.textContent = srcs.every(s => collapsed[s]) ? "▸ 모두 펼치기" : "▾ 모두 접기"; }
+  srcs.forEach(src => {
+    const items = groups[src];
+    const gd = items.filter(i => i.done).length;
+    const isCol = !!collapsed[src];
     const g = el("div", "cart-group");
-    const gd = groups[src].filter(i => i.done).length;
-    g.innerHTML = `<div class="cart-group-h"><span>🍽 ${esc(src)}</span><span class="cart-group-n">${gd}/${groups[src].length}</span></div>`;
-    const ul = el("ul", "cart-list");
-    groups[src].forEach(item => {
-      const li = el("li", item.done ? "done" : "");
-      li.innerHTML = `
-        <input type="checkbox" ${item.done ? "checked" : ""} data-check="${item.id}">
-        <label>${esc(item.text)}</label>
-        <button class="del" data-del="${item.id}" aria-label="삭제">🗑</button>`;
-      ul.appendChild(li);
-    });
-    g.appendChild(ul);
+    const head = el("div", "cart-group-h");
+    head.innerHTML = `<span class="cg-toggle">${isCol ? "▸" : "▾"}</span><span class="cg-name">🍽 ${esc(src)}</span><span class="cart-group-n">${gd}/${items.length}</span>`;
+    head.onclick = () => { if (collapsed[src]) delete collapsed[src]; else collapsed[src] = true; store.set("rt_collapsed", collapsed); renderCart(); };
+    g.appendChild(head);
+    if (!isCol) {
+      const ul = el("ul", "cart-list");
+      items.forEach(item => {
+        const li = el("li", item.done ? "done" : "");
+        li.innerHTML = `<input type="checkbox" ${item.done ? "checked" : ""} data-check="${item.id}"><label>${esc(item.text)}</label><button class="del" data-del="${item.id}" aria-label="삭제">🗑</button>`;
+        ul.appendChild(li);
+      });
+      g.appendChild(ul);
+    }
     list.appendChild(g);
   });
   list.querySelectorAll("[data-check]").forEach(cb => cb.onchange = () => {
@@ -372,6 +385,11 @@ $("#cartSelectAll").onclick = () => {
   const anyOff = cart.some(c => !c.done);
   cart.forEach(c => c.done = anyOff);
   store.set("rt_cart", cart); renderCart();
+};
+$("#cartCollapseAll").onclick = () => {
+  const gs = [...new Set(cart.map(c => c.src || "직접추가"))];
+  if (gs.every(s => collapsed[s])) collapsed = {}; else gs.forEach(s => collapsed[s] = true);
+  store.set("rt_collapsed", collapsed); renderCart();
 };
 
 // 쿠팡에서 재료 담기 (체크된 재료 → 쿠팡 파트너스 어필리에이트 링크)
@@ -434,6 +452,7 @@ $("#cartAddBtn").onclick = () => {
   $("#cartInput").value = ""; store.set("rt_cart", cart); updateCounts(); renderCart();
 };
 $("#cartInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#cartAddBtn").click(); });
+$("#cartShare").onclick = shareCartList;
 $("#cartCopy").onclick = async () => {
   if (cart.length === 0) return toast("목록이 비어 있어요");
   const text = "🛒 장보기 목록\n" + cart.map(c => `▢ ${c.text}`).join("\n");
@@ -476,6 +495,129 @@ $("#q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); })
 $("#order").onchange = () => { if (currentQuery) doSearch(currentQuery); };
 $("#moreBtn").onclick = () => doSearch(currentQuery, true);
 
+/* ---------- 조리 모드 ---------- */
+let cook = { recipe: null, steps: [], i: 0, wake: null, timer: null, remain: 0 };
+function parseStepSeconds(text) {
+  const h = /(\d+)\s*시간/.exec(text), m = /(\d+)\s*분/.exec(text), s = /(\d+)\s*초/.exec(text);
+  return (h ? +h[1] * 3600 : 0) + (m ? +m[1] * 60 : 0) + (s ? +s[1] : 0);
+}
+async function keepAwake() { try { cook.wake = await navigator.wakeLock.request("screen"); } catch {} }
+function releaseAwake() { try { cook.wake && cook.wake.release(); } catch {} cook.wake = null; }
+document.addEventListener("visibilitychange", () => { if (cook.recipe && document.visibilityState === "visible" && !cook.wake) keepAwake(); });
+function startCook(d) {
+  const steps = (d.steps || []).filter(Boolean);
+  if (!steps.length) return toast("조리 순서가 없어요");
+  cook = { recipe: d, steps, i: 0, wake: null, timer: null, remain: 0 };
+  $("#cookMode").classList.remove("hidden"); document.body.style.overflow = "hidden";
+  keepAwake(); renderCook();
+}
+function stopCook() {
+  clearInterval(cook.timer); releaseAwake();
+  $("#cookMode").classList.add("hidden"); document.body.style.overflow = ""; cook.recipe = null;
+}
+function beep() {
+  try {
+    const a = new (window.AudioContext || window.webkitAudioContext)();
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination); o.frequency.value = 880; o.start();
+    g.gain.setValueAtTime(0.25, a.currentTime); g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.9);
+    o.stop(a.currentTime + 0.9);
+  } catch {}
+  if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+}
+function fmtT(s) { const m = Math.floor(s / 60), ss = s % 60; return m + ":" + String(ss).padStart(2, "0"); }
+function startTimer(sec) {
+  clearInterval(cook.timer); cook.remain = sec; renderCook();
+  cook.timer = setInterval(() => {
+    cook.remain--;
+    const disp = document.getElementById("timerDisp");
+    if (cook.remain <= 0) { clearInterval(cook.timer); cook.timer = null; beep(); if (disp) disp.textContent = "완료! ⏰"; return; }
+    if (disp) disp.textContent = fmtT(cook.remain);
+  }, 1000);
+}
+function renderCook() {
+  const d = cook.recipe, steps = cook.steps, i = cook.i;
+  const sec = parseStepSeconds(steps[i] || "");
+  const ing = (d.ingredients || []).filter(x => x && (x.item || x.amount));
+  $("#cookMode").innerHTML = `
+    <div class="cook-top"><span class="cook-dish">${esc(d.dish || "레시피")}</span><button class="cook-x" id="cookClose">✕</button></div>
+    <div class="cook-prog">${i + 1} / ${steps.length} 단계</div>
+    <div class="cook-step">${esc(steps[i])}</div>
+    ${sec ? `<div class="cook-timer"><button id="timerBtn">⏱ ${fmtT(sec)} 타이머 시작</button><div id="timerDisp" class="timer-disp">${cook.timer ? (cook.remain > 0 ? fmtT(cook.remain) : "완료! ⏰") : ""}</div></div>` : ""}
+    <details class="cook-ing"><summary>🧺 재료 보기</summary><ul>${ing.map(x => `<li>${esc(x.item || "")} <b>${esc(x.amount || "")}</b></li>`).join("")}</ul></details>
+    <div class="cook-nav">
+      <button id="cookPrev" ${i === 0 ? "disabled" : ""}>← 이전</button>
+      ${i < steps.length - 1 ? `<button id="cookNext" class="primary">다음 →</button>` : `<button id="cookDone" class="primary">완료 🎉</button>`}
+    </div>`;
+  $("#cookClose").onclick = stopCook;
+  const pv = $("#cookPrev"); if (pv) pv.onclick = () => { if (cook.i > 0) { cook.i--; clearInterval(cook.timer); cook.timer = null; renderCook(); } };
+  const nx = $("#cookNext"); if (nx) nx.onclick = () => { cook.i++; clearInterval(cook.timer); cook.timer = null; renderCook(); };
+  const dn = $("#cookDone"); if (dn) dn.onclick = stopCook;
+  const tb = $("#timerBtn"); if (tb) tb.onclick = () => startTimer(sec);
+}
+
+/* ---------- 공유 ---------- */
+async function shareText(title, text, url) {
+  try { if (navigator.share) { await navigator.share({ title, text, url }); return; } } catch { return; }
+  try { await navigator.clipboard.writeText((text || "") + (url ? "\n" + url : "")); toast("복사했어요 — 붙여넣어 공유하세요"); }
+  catch { toast("이 환경에선 공유가 어려워요"); }
+}
+function shareRecipe(d) {
+  const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount)).map(i => `- ${(i.item || "")} ${(i.amount || "")}`.trim()).join("\n");
+  const text = `🍳 ${d.dish || "레시피"}\n\n[재료]\n${ing || "(영상 참고)"}\n\n레시피튜브`;
+  shareText(d.dish || "레시피", text, d._url || location.origin);
+}
+function shareCartList() {
+  if (!cart.length) return toast("목록이 비어 있어요");
+  const text = "🛒 장보기 목록\n" + cart.map(c => `${c.done ? "✔" : "▢"} ${c.text}`).join("\n");
+  shareText("장보기 목록", text, location.origin);
+}
+
+/* ---------- 홈(추천·최근본·인기) ---------- */
+let recent = store.get("rt_recent", []);
+const SUGGEST = ["김치찌개","된장찌개","제육볶음","김치볶음밥","마라탕","크림파스타","닭볶음탕","계란찜","오므라이스","떡볶이","김밥","불고기","비빔국수","순두부찌개","김치전"];
+function trackRecent(v) {
+  if (!v) return;
+  recent = [{ id: v.id, title: v.title, channel: v.channel, thumbnail: v.thumbnail, url: v.url, durationText: v.durationText, viewCount: v.viewCount, publishedAt: v.publishedAt }, ...recent.filter(r => r.id !== v.id)].slice(0, 12);
+  store.set("rt_recent", recent);
+}
+async function loadTrending() {
+  const today = new Date().toISOString().slice(0, 10);
+  const cache = store.get("rt_trend", null);
+  if (cache && cache.day === today && cache.items) return cache.items;
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent("인기 요리 레시피")}&order=views`);
+    const data = await res.json();
+    if (res.ok && data.items) { const items = data.items.slice(0, 8); store.set("rt_trend", { day: today, items }); return items; }
+  } catch {}
+  return (cache && cache.items) || [];
+}
+function renderHome() {
+  const home = $("#home"); if (!home) return;
+  const start = new Date().getDate() % SUGGEST.length;
+  const sug = [...SUGGEST.slice(start), ...SUGGEST.slice(0, start)].slice(0, 10);
+  let html = "";
+  if (recent.length) html += `<div class="home-block"><h2>🕘 최근 본 레시피</h2><div class="grid" id="recentGrid"></div></div>`;
+  html += `<div class="home-block"><h2>🔥 요즘 인기</h2><div class="grid" id="trendGrid"><div class="status"><span class="spinner"></span></div></div></div>`;
+  html += `<div class="home-block"><h2>이런 건 어때요?</h2><div class="history">${sug.map(s => `<span class="chip" data-sug="${esc(s)}">${esc(s)}</span>`).join("")}</div></div>`;
+  home.innerHTML = html;
+  if (recent.length) { const rg = $("#recentGrid"); recent.forEach(v => { lastResults.set(v.id, v); rg.appendChild(card(v)); }); }
+  home.querySelectorAll("[data-sug]").forEach(c => c.onclick = () => doSearch(c.dataset.sug));
+  loadTrending().then(items => {
+    const tg = $("#trendGrid"); if (!tg) return;
+    tg.innerHTML = "";
+    if (!items.length) { tg.innerHTML = '<p class="muted">인기 영상을 불러오지 못했어요. 검색해 보세요.</p>'; return; }
+    items.forEach(v => { lastResults.set(v.id, v); tg.appendChild(card(v)); });
+  });
+}
+function showHome() { $("#home").classList.remove("hidden"); renderHome(); }
+function hideHome() { const h = $("#home"); if (h) h.classList.add("hidden"); }
+function goHome() {
+  currentQuery = ""; $("#q").value = ""; $("#results").innerHTML = ""; $("#resultMeta").textContent = "";
+  $("#savedTop").classList.add("hidden"); $("#moreBtn").classList.add("hidden"); $("#status").textContent = "";
+  showView("search"); showHome();
+}
+
 /* ---------- 초기화 ---------- */
-applyTheme(); updateCounts(); renderHistory();
+applyTheme(); updateCounts(); renderHistory(); showHome();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});

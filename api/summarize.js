@@ -3,6 +3,23 @@ const YT = "https://www.googleapis.com/youtube/v3";
 const cache = new Map();
 const TTL = 1000 * 60 * 60 * 24;
 
+async function kvGet(key) {
+  const u = process.env.UPSTASH_REDIS_REST_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!u || !t) return null;
+  try {
+    const r = await fetch(u, { method: "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(["GET", key]) });
+    const j = await r.json();
+    return j && j.result ? JSON.parse(j.result) : null;
+  } catch { return null; }
+}
+async function kvSet(key, val) {
+  const u = process.env.UPSTASH_REDIS_REST_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!u || !t) return;
+  try {
+    await fetch(u, { method: "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(["SET", key, JSON.stringify(val), "EX", 2592000]) });
+  } catch {}
+}
+
 async function getTranscript(videoId) {
   try {
     const ua = { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en" };
@@ -187,6 +204,8 @@ export default async function handler(req, res) {
   if (!videoId) return res.status(400).json({ error: "videoId가 필요합니다." });
   const hit = cache.get(videoId);
   if (hit && Date.now() - hit.at < TTL) return res.status(200).json(hit.data);
+  const kv = await kvGet("sum:" + videoId);
+  if (kv) { cache.set(videoId, { at: Date.now(), data: kv }); return res.status(200).json(kv); }
   try {
     const vp = new URLSearchParams({ key, part: "snippet,contentDetails", id: videoId });
     const vJson = await (await fetch(`${YT}/videos?${vp}`)).json();
@@ -207,7 +226,7 @@ export default async function handler(req, res) {
     if (noIng && noStep && !data.note) {
       data.note = "이 영상은 자막·설명이 부족해 자동으로 정리할 재료·순서를 찾지 못했어요. ‘영상에서 보기’로 확인해 주세요.";
     }
-    if (hasContent(data)) cache.set(videoId, { at: Date.now(), data });
+    if (hasContent(data)) { cache.set(videoId, { at: Date.now(), data }); await kvSet("sum:" + videoId, data); }
     return res.status(200).json(data);
   } catch (e) {
     return res.status(500).json({ error: "요약 중 오류: " + (e?.message || String(e)) });
