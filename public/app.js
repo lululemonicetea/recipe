@@ -119,11 +119,16 @@ function renderSavedTop(q) {
     const left = el("div", "saved-left");
     left.appendChild(card(v, true));
     const right = el("div", "saved-right");
-    right.innerHTML = '<div class="mini-loading"><span class="spinner"></span><span>레시피 불러오는 중…</span></div>';
     row.appendChild(left);
     row.appendChild(right);
     grid.appendChild(row);
-    loadInlineRecipe(v.id, right);
+    if (getSum(v.id)) {
+      right.innerHTML = '<div class="mini-loading"><span class="spinner"></span><span>불러오는 중…</span></div>';
+      loadInlineRecipe(v.id, right);
+    } else {
+      right.innerHTML = '<button class="btn-recipe" style="width:100%;padding:12px">🍳 레시피 요약 보기</button>';
+      right.firstChild.onclick = () => { right.innerHTML = '<div class="mini-loading"><span class="spinner"></span><span>불러오는 중…</span></div>'; loadInlineRecipe(v.id, right); };
+    }
   });
   wrap.classList.remove("hidden");
 }
@@ -178,7 +183,7 @@ function toggleStar(id, btn) {
       savedAt: Date.now(),
     });
     toast("⭐ 저장했어요! 다음에 비슷한 메뉴를 검색하면 맨 위에 나와요");
-    fetchSummary(id).catch(() => {});
+    if (!getSum(id)) fetchSummary(id).catch(() => {});
   }
   store.set("rt_saved", saved);
   updateCounts();

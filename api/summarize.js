@@ -135,12 +135,23 @@ async function summarizeWithGeminiVideo(videoId, durSec) {
 const hasContent = d => (d.ingredients || []).some(i => i && (i.item || i.amount)) || (d.steps || []).length > 0;
 const isFull = d => (d.ingredients || []).some(i => i && (i.item || i.amount)) && (d.steps || []).length > 0;
 
+function cleanErr(e) {
+  const m = e?.message || String(e);
+  if (/quota|exceed|RESOURCE_EXHAUSTED|rate|429/i.test(m)) return "무료 AI 사용량이 잠시 초과됐어요. 1~2분 뒤 다시 시도해 주세요.";
+  return "영상 분석 실패: " + m.slice(0, 120);
+}
+
 async function smartSummarize(videoId, title, description, tags, durSec) {
   const videoOn = process.env.GEMINI_VIDEO !== "0";
   const isShort = durSec > 0 && durSec <= 90;
   let vErr = "";
-  if (isShort && videoOn) {
-    try { return await summarizeWithGeminiVideo(videoId, durSec); } catch (e) { vErr = e?.message || String(e); }
+  if (isShort) {
+    if (videoOn) {
+      try { return await summarizeWithGeminiVideo(videoId, durSec); } catch (e) { vErr = cleanErr(e); }
+    }
+    const only = summarizeFromText(title, description);
+    if (vErr && !hasContent(only)) only.debug = vErr;
+    return only;
   }
   let data;
   try {
@@ -150,9 +161,9 @@ async function smartSummarize(videoId, title, description, tags, durSec) {
     data = summarizeFromText(title, description);
   }
   if (videoOn && !isFull(data)) {
-    try { const v = await summarizeWithGeminiVideo(videoId, durSec); if (hasContent(v)) return v; } catch (e) { vErr = vErr || (e?.message || String(e)); }
+    try { const v = await summarizeWithGeminiVideo(videoId, durSec); if (hasContent(v)) return v; } catch (e) { vErr = cleanErr(e); }
   }
-  if (vErr && !hasContent(data)) data.debug = "영상분석 실패: " + vErr;
+  if (vErr && !hasContent(data)) data.debug = vErr;
   return data;
 }
 
