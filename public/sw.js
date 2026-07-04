@@ -1,5 +1,5 @@
-// 간단한 오프라인 캐시 — 앱 껍데기는 캐시, API는 항상 네트워크
-const CACHE = "recipe-tube-v9";
+// 네트워크 우선 캐시 — 배포 시 최신 파일이 바로 반영되고, 오프라인이면 캐시 사용
+const CACHE = "recipe-tube-v11";
 const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/icon.svg", "/icon-192.png", "/icon-512.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", e => {
@@ -10,12 +10,13 @@ self.addEventListener("activate", e => {
 });
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
-  if (url.pathname.startsWith("/api/")) return; // API는 브라우저 기본 처리(네트워크)
+  if (url.pathname.startsWith("/api/")) return;
+  if (e.request.method !== "GET") return;
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
+    fetch(e.request).then(res => {
       const copy = res.clone();
-      if (res.ok && e.request.method === "GET") caches.open(CACHE).then(c => c.put(e.request, copy));
+      if (res.ok) caches.open(CACHE).then(c => c.put(e.request, copy));
       return res;
-    }).catch(() => caches.match("/index.html")))
+    }).catch(() => caches.match(e.request).then(hit => hit || caches.match("/index.html")))
   );
 });

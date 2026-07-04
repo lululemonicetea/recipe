@@ -10,7 +10,7 @@ let saved   = store.get("rt_saved", []);
 let history = store.get("rt_history", []);
 let cart    = store.get("rt_cart", []);
 let theme   = store.get("rt_theme", "light");
-let sumCache = store.get("rt_sum", {});
+let sumCache = store.get("rt_sum2", {});
 
 /* ---------- 유틸 ---------- */
 const $ = s => document.querySelector(s);
@@ -201,10 +201,12 @@ const trim = n => (Math.round(n * 100) / 100).toString();
 
 function getSum(id) { const h = sumCache[id]; return h && (Date.now() - h.at < 86400000) ? h.data : null; }
 function putSum(id, data) {
+  const ok = (data.ingredients || []).some(i => i && (i.item || i.amount)) || (data.steps || []).length > 0;
+  if (!ok) return;
   sumCache[id] = { data, at: Date.now() };
   const ks = Object.keys(sumCache);
   if (ks.length > 120) { ks.sort((a, b) => sumCache[a].at - sumCache[b].at); delete sumCache[ks[0]]; }
-  store.set("rt_sum", sumCache);
+  store.set("rt_sum2", sumCache);
 }
 async function fetchSummary(id) {
   const c = getSum(id); if (c) return c;
@@ -249,6 +251,7 @@ function recipeBodyHTML(d, m, opts = {}) {
       ${d.difficulty ? `<span>🔥 <b>${esc(d.difficulty)}</b></span>` : ""}
     </div>
     ${d.aiError ? `<div class="note">${esc(d.aiError)}</div>` : ""}
+    ${d.debug ? `<div class="note" style="font-size:11px;opacity:.6">${esc(d.debug)}</div>` : ""}
     ${d.note ? `<div class="note">${esc(d.note)}</div>` : ""}
     ${empty && !d.note ? `<div class="note">자막·설명이 부족해 정리할 재료·순서를 찾지 못했어요. ‘영상에서 보기’로 확인해 주세요.</div>` : ""}
     ${ing.length ? `

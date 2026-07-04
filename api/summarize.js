@@ -38,6 +38,8 @@ const SCHEMA = {
   },
 };
 
+const KOR_SYS = { parts: [{ text: "너는 한국어로만 답하는 요리 도우미다. dish, ingredients, steps, tips의 모든 값을 반드시 자연스러운 한국어로 작성한다. 어떤 경우에도 영어 문장으로 답하지 않는다." }] };
+
 function safeJson(text) {
   const s = text.indexOf("{"), e = text.lastIndexOf("}");
   let t = s >= 0 && e >= 0 ? text.slice(s, e + 1) : text;
@@ -51,7 +53,7 @@ async function summarizeWithGemini(title, description, tags, transcript) {
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
   const body = {
-    contents: [{ parts: [{ text: buildPrompt(title, description, tags, transcript) }] }],
+    systemInstruction: KOR_SYS, contents: [{ parts: [{ text: buildPrompt(title, description, tags, transcript) }] }],
     generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 },
   };
   const r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -117,10 +119,10 @@ async function summarizeWithGeminiVideo(videoId, durSec) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
   const parts = [
     { text: "이 요리 영상을 보고(화면 자막과 음성 모두 참고) 재료와 조리 순서를 정리하세요. 없으면 지어내지 말고 비워두세요. 한국어로 답하세요." },
-    { fileData: { fileUri: `https://www.youtube.com/watch?v=${videoId}` } },
+    { fileData: { fileUri: `https://www.youtube.com/watch?v=${videoId}`, mimeType: "video/*" } },
   ];
   if (durSec > 720) parts[1].videoMetadata = { startOffset: "0s", endOffset: "720s" };
-  const body = { contents: [{ parts }], generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 } };
+  const body = { systemInstruction: KOR_SYS, contents: [{ parts }], generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 } };
   const r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = await r.json();
   if (!r.ok) throw new Error(j?.error?.message || "Gemini 영상 요청 실패");
@@ -136,8 +138,9 @@ const isFull = d => (d.ingredients || []).some(i => i && (i.item || i.amount)) &
 async function smartSummarize(videoId, title, description, tags, durSec) {
   const videoOn = process.env.GEMINI_VIDEO !== "0";
   const isShort = durSec > 0 && durSec <= 90;
+  let vErr = "";
   if (isShort && videoOn) {
-    try { return await summarizeWithGeminiVideo(videoId, durSec); } catch {}
+    try { return await summarizeWithGeminiVideo(videoId, durSec); } catch (e) { vErr = e?.message || String(e); }
   }
   let data;
   try {
@@ -147,8 +150,9 @@ async function smartSummarize(videoId, title, description, tags, durSec) {
     data = summarizeFromText(title, description);
   }
   if (videoOn && !isFull(data)) {
-    try { const v = await summarizeWithGeminiVideo(videoId, durSec); if (hasContent(v)) return v; } catch {}
+    try { const v = await summarizeWithGeminiVideo(videoId, durSec); if (hasContent(v)) return v; } catch (e) { vErr = vErr || (e?.message || String(e)); }
   }
+  if (vErr && !hasContent(data)) data.debug = "영상분석 실패: " + vErr;
   return data;
 }
 
@@ -180,7 +184,7 @@ export default async function handler(req, res) {
     if (noIng && noStep && !data.note) {
       data.note = "이 영상은 자막·설명이 부족해 자동으로 정리할 재료·순서를 찾지 못했어요. ‘영상에서 보기’로 확인해 주세요.";
     }
-    cache.set(videoId, { at: Date.now(), data });
+    if (hasContent(data)) cache.set(videoId, { at: Date.now(), data });
     return res.status(200).json(data);
   } catch (e) {
     return res.status(500).json({ error: "요약 중 오류: " + (e?.message || String(e)) });
