@@ -280,3 +280,15 @@ body {
 .cb-head button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; }
 .cb-body { display: flex; justify-content: center; padding: 8px; }
 .cb-body iframe, .cb-body img { max-width: 100%; border: 0; }
+
+/* 조리 모드: 전체 단계 목록 + 현재 단계 강조 */
+.cook-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+.cstep { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 12px; cursor: pointer; }
+.cstep-n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--border); color: var(--muted); font-size: 12px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.cstep-t { font-size: 14px; line-height: 1.4; color: var(--muted); }
+.cstep.past { opacity: .6; }
+.cstep.past .cstep-n { background: color-mix(in srgb, var(--brand) 25%, transparent); color: var(--brand); }
+.cstep.active { background: color-mix(in srgb, var(--brand) 10%, transparent); padding: 16px 14px; }
+.cstep.active .cstep-n { background: var(--brand); color: #fff; width: 28px; height: 28px; font-size: 14px; }
+.cstep.active .cstep-t { font-size: 22px; font-weight: 500; line-height: 1.55; color: var(--text); }
+@media (max-width: 640px) { .cstep.active .cstep-t { font-size: 20px; } }

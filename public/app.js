@@ -550,10 +550,15 @@ function renderCook() {
   const d = cook.recipe, steps = cook.steps, i = cook.i;
   const sec = parseStepSeconds(steps[i] || "");
   const ing = (d.ingredients || []).filter(x => x && (x.item || x.amount));
+  const brief = t => { const c = String(t).replace(/^\d+[.)]\s*/, "").trim(); return c.length > 24 ? c.slice(0, 24) + "…" : c; };
+  const listHtml = steps.map((s, idx) => {
+    const active = idx === i, cls = active ? "active" : idx < i ? "past" : "future";
+    return `<div class="cstep ${cls}" data-step="${idx}"><span class="cstep-n">${idx + 1}</span><span class="cstep-t">${active ? esc(s) : esc(brief(s))}</span></div>`;
+  }).join("");
   $("#cookMode").innerHTML = `
     <div class="cook-top"><span class="cook-dish">${esc(d.dish || "레시피")}</span><button class="cook-x" id="cookClose">✕</button></div>
     <div class="cook-prog">${i + 1} / ${steps.length} 단계</div>
-    <div class="cook-step">${esc(steps[i])}</div>
+    <div class="cook-list">${listHtml}</div>
     ${sec ? `<div class="cook-timer"><button id="timerBtn">⏱ ${fmtT(sec)} 타이머 시작</button><div id="timerDisp" class="timer-disp">${cook.timer ? (cook.remain > 0 ? fmtT(cook.remain) : "완료! ⏰") : ""}</div></div>` : ""}
     <details class="cook-ing"><summary>🧺 재료 보기</summary><ul>${ing.map(x => `<li>${esc(x.item || "")} <b>${esc(x.amount || "")}</b></li>`).join("")}</ul></details>
     <div class="cook-nav">
@@ -561,10 +566,12 @@ function renderCook() {
       ${i < steps.length - 1 ? `<button id="cookNext" class="primary">다음 →</button>` : `<button id="cookDone" class="primary">완료 🎉</button>`}
     </div>`;
   $("#cookClose").onclick = stopCook;
+  $("#cookMode").querySelectorAll("[data-step]").forEach(elm => elm.onclick = () => { cook.i = +elm.dataset.step; clearInterval(cook.timer); cook.timer = null; renderCook(); });
   const pv = $("#cookPrev"); if (pv) pv.onclick = () => { if (cook.i > 0) { cook.i--; clearInterval(cook.timer); cook.timer = null; renderCook(); } };
   const nx = $("#cookNext"); if (nx) nx.onclick = () => { cook.i++; clearInterval(cook.timer); cook.timer = null; renderCook(); };
   const dn = $("#cookDone"); if (dn) dn.onclick = stopCook;
   const tb = $("#timerBtn"); if (tb) tb.onclick = () => startTimer(sec);
+  const act = $("#cookMode").querySelector(".cstep.active"); if (act) act.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 /* ---------- 공유 ---------- */
