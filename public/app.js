@@ -333,7 +333,18 @@ function addIngredientsToCart(ing, src, mult) {
   toast(added ? `🛒 ${added}개 재료를 담았어요` : "이미 담겨 있어요");
 }
 
+let bannerDismissed = false;
+function renderBanner() {
+  const w = $("#cartBannerWrap"); if (!w) return;
+  const code = (window.COUPANG_BANNER || "").trim();
+  if (!code || bannerDismissed) { w.classList.add("hidden"); w.innerHTML = ""; return; }
+  w.classList.remove("hidden");
+  w.innerHTML = `<div class="cb-head"><span>쿠팡 파트너스 · 광고</span><button id="cbClose" aria-label="닫기">✕</button></div><div class="cb-body">${code}</div>`;
+  const x = $("#cbClose"); if (x) x.onclick = () => { bannerDismissed = true; renderBanner(); };
+}
+
 function renderCart() {
+  renderBanner();
   const list = $("#cartList");
   const remain = cart.filter(c => !c.done).length;
   const done = cart.length - remain;
@@ -601,13 +612,13 @@ function renderHome() {
   html += `<div class="home-block"><h2>🔥 요즘 인기</h2><div class="grid" id="trendGrid"><div class="status"><span class="spinner"></span></div></div></div>`;
   html += `<div class="home-block"><h2>이런 건 어때요?</h2><div class="history">${sug.map(s => `<span class="chip" data-sug="${esc(s)}">${esc(s)}</span>`).join("")}</div></div>`;
   home.innerHTML = html;
-  if (recent.length) { const rg = $("#recentGrid"); recent.forEach(v => { lastResults.set(v.id, v); rg.appendChild(card(v)); }); }
+  if (recent.length) { const rg = $("#recentGrid"); recent.slice(0, 3).forEach(v => { lastResults.set(v.id, v); rg.appendChild(card(v)); }); }
   home.querySelectorAll("[data-sug]").forEach(c => c.onclick = () => doSearch(c.dataset.sug));
   loadTrending().then(items => {
     const tg = $("#trendGrid"); if (!tg) return;
     tg.innerHTML = "";
     if (!items.length) { tg.innerHTML = '<p class="muted">인기 영상을 불러오지 못했어요. 검색해 보세요.</p>'; return; }
-    items.forEach(v => { lastResults.set(v.id, v); tg.appendChild(card(v)); });
+    items.slice(0, 6).forEach(v => { lastResults.set(v.id, v); tg.appendChild(card(v)); });
   });
 }
 function showHome() { $("#home").classList.remove("hidden"); renderHome(); }
