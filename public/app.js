@@ -349,15 +349,15 @@ function renderCart() {
   const remain = cart.filter(c => !c.done).length;
   const done = cart.length - remain;
   const fab = document.getElementById("cartFab");
-  if (fab) fab.textContent = remain ? `🛒 남은 재료 담기 (${remain})` : "🛒 쿠팡에서 담기";
+  if (fab) fab.textContent = remain ? `🛒 쿠팡에서 재료 구매하기 (${remain})` : "🛒 쿠팡에서 재료 구매하기";
   const sa = document.getElementById("cartSelectAll");
-  if (sa) sa.textContent = cart.length && remain === 0 ? "↺ 전체 해제" : "✓ 전체 완료";
+  if (sa) sa.textContent = cart.length && remain === 0 ? "↺ 전체 해제" : "✓ 전체 있음";
   const ca = document.getElementById("cartCollapseAll");
   list.innerHTML = "";
   if (cart.length === 0) { list.innerHTML = '<p class="muted">목록이 비어 있어요. 레시피에서 재료를 담아보세요.</p>'; if (ca) ca.style.display = "none"; return; }
   const pct = Math.round(done / cart.length * 100);
   const prog = el("div", "cart-progress");
-  prog.innerHTML = `<div class="cart-progress-t"><span>준비완료 <b>${done}</b> · 남은 <b>${remain}</b></span><span>${pct}%</span></div><div class="cart-bar"><div style="width:${pct}%"></div></div>`;
+  prog.innerHTML = `<div class="cart-progress-t"><span>있음 <b>${done}</b> · 살 것 <b>${remain}</b></span><span>${pct}%</span></div><div class="cart-bar"><div style="width:${pct}%"></div></div>`;
   list.appendChild(prog);
   const groups = {};
   cart.forEach(it => { const k = it.src || "직접추가"; (groups[k] = groups[k] || []).push(it); });
@@ -376,16 +376,13 @@ function renderCart() {
       const ul = el("ul", "cart-list");
       items.forEach(item => {
         const li = el("li", item.done ? "done" : "");
-        li.innerHTML = `<input type="checkbox" ${item.done ? "checked" : ""} data-check="${item.id}"><label>${esc(item.text)}</label><button class="del" data-del="${item.id}" aria-label="삭제">🗑</button>`;
+        li.innerHTML = `<span class="ck">${item.done ? "✓" : ""}</span><label>${esc(item.text)}</label>${item.done ? '<span class="have">있음</span>' : ""}<button class="del" data-del="${item.id}" aria-label="삭제">🗑</button>`;
+        li.onclick = e => { if (e.target.closest("[data-del]")) return; item.done = !item.done; store.set("rt_cart", cart); updateCounts(); renderCart(); };
         ul.appendChild(li);
       });
       g.appendChild(ul);
     }
     list.appendChild(g);
-  });
-  list.querySelectorAll("[data-check]").forEach(cb => cb.onchange = () => {
-    const it = cart.find(c => c.id === cb.dataset.check); if (it) it.done = cb.checked;
-    store.set("rt_cart", cart); updateCounts(); renderCart();
   });
   list.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     cart = cart.filter(c => c.id !== b.dataset.del); store.set("rt_cart", cart); updateCounts(); renderCart();
