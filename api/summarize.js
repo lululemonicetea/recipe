@@ -48,6 +48,21 @@ function safeJson(text) {
   return JSON.parse(t.replace(/[ -]+/g, " ").replace(/,\s*([}\]])/g, "$1"));
 }
 
+async function geminiFetch(endpoint, body) {
+  let last;
+  for (let i = 0; i < 3; i++) {
+    const r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (r.ok) return j;
+    const msg = (j && j.error && j.error.message) || "";
+    const transient = r.status === 503 || r.status === 500 || /high demand|overloaded|UNAVAILABLE|try again|internal/i.test(msg);
+    last = new Error(msg || ("Gemini " + r.status));
+    if (!transient) throw last;
+    await new Promise(res => setTimeout(res, 1200 * (i + 1)));
+  }
+  throw last;
+}
+
 async function summarizeWithGemini(title, description, tags, transcript) {
   const key = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -56,9 +71,7 @@ async function summarizeWithGemini(title, description, tags, transcript) {
     systemInstruction: KOR_SYS, contents: [{ parts: [{ text: buildPrompt(title, description, tags, transcript) }] }],
     generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 },
   };
-  const r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j?.error?.message || "Gemini 요청 실패");
+  const j = await geminiFetch(endpoint, body);
   const text = (j?.candidates?.[0]?.content?.parts || []).map(p => p.text).join("").trim();
   const data = safeJson(text.replace(/^```json\s*/i, "").replace(/```$/g, "").trim());
   data.source = "ai";
@@ -123,9 +136,7 @@ async function summarizeWithGeminiVideo(videoId, durSec) {
   ];
   if (durSec > 720) parts[1].videoMetadata = { startOffset: "0s", endOffset: "720s" };
   const body = { systemInstruction: KOR_SYS, contents: [{ parts }], generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 } };
-  const r = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j?.error?.message || "Gemini 영상 요청 실패");
+  const j = await geminiFetch(endpoint, body);
   const text = (j?.candidates?.[0]?.content?.parts || []).map(p => p.text).join("").trim();
   const data = safeJson(text.replace(/^```json\s*/i, "").replace(/```$/g, "").trim());
   data.source = "ai-video";
@@ -137,6 +148,7 @@ const isFull = d => (d.ingredients || []).some(i => i && (i.item || i.amount)) &
 
 function cleanErr(e) {
   const m = e?.message || String(e);
+  if (/high demand|overloaded|UNAVAILABLE|503|try again|internal/i.test(m)) return "AI 서버가 잠시 붐벼요. 조금 뒤 다시 시도해 주세요.";
   if (/quota|exceed|RESOURCE_EXHAUSTED|rate|429/i.test(m)) return "무료 AI 사용량이 잠시 초과됐어요. 1~2분 뒤 다시 시도해 주세요.";
   return "영상 분석 실패: " + m.slice(0, 120);
 }
