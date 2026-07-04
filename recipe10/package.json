@@ -1,0 +1,11 @@
+{
+  "name": "recipe-tube",
+  "version": "1.0.0",
+  "private": true,
+  "description": "유튜브 기반 요리 레시피 플랫폼 - 검색, AI 재료·조리법 요약, 즐겨찾기",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev"
+  }
+}

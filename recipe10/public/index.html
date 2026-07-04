@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ff5722" />
+  <title>레시피튜브 · 유튜브 요리 레시피</title>
+  <meta name="description" content="유튜브 인기 요리 영상을 검색하고, 재료·조리법을 요약해 보고, 좋은 영상을 저장하세요." />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/favicon-64.png" sizes="64x64" type="image/png" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" id="brandHome" title="홈으로">
+      <span class="logo">🍳</span>
+      <span class="brand-name">레시피<b>튜브</b></span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="search"><span class="tab-i">🔍</span><span class="tab-t">검색</span></button>
+      <button class="tab" data-view="saved"><span class="tab-i">⭐</span><span class="tab-t">저장함</span><span class="badge" id="savedCount">0</span></button>
+      <button class="tab" data-view="cart"><span class="tab-i">🛒</span><span class="tab-t">장보기</span><span class="badge" id="cartCount">0</span></button>
+    </nav>
+    <button class="icon-btn" id="themeToggle" title="화면 모드">🌙</button>
+  </header>
+
+  <!-- 검색 뷰 -->
+  <main id="view-search" class="view active">
+    <section class="search-hero">
+      <div class="search-box">
+        <input id="q" type="search" placeholder="예: 김치찌개, 마라탕, 크림파스타…" autocomplete="off" />
+        <button id="searchBtn">검색</button>
+      </div>
+      <div class="controls">
+        <label>정렬
+          <select id="order">
+            <option value="performance">성과순(추천)</option>
+            <option value="views">조회수순</option>
+            <option value="latest">최신순</option>
+            <option value="relevance">관련성순</option>
+          </select>
+        </label>
+        <div class="history" id="history"></div>
+      </div>
+    </section>
+
+    <section id="savedTop" class="saved-top hidden">
+      <h2>⭐ 저장한 영상 <small>이 메뉴로 저장해둔 영상이에요</small></h2>
+      <div class="grid" id="savedTopGrid"></div>
+    </section>
+
+    <section>
+      <div id="resultMeta" class="result-meta"></div>
+      <div class="grid" id="results"></div>
+      <div id="status" class="status"></div>
+      <button id="moreBtn" class="more-btn hidden">더 보기</button>
+    </section>
+  </main>
+
+  <!-- 저장함 뷰 -->
+  <main id="view-saved" class="view">
+    <h1 class="view-title">⭐ 저장함</h1>
+    <p class="muted" id="savedEmpty">아직 저장한 영상이 없어요. 검색 결과에서 별표(☆)를 눌러 저장해 보세요.</p>
+    <div class="grid" id="savedGrid"></div>
+  </main>
+
+  <!-- 장보기 뷰 -->
+  <main id="view-cart" class="view">
+    <h1 class="view-title">🛒 장보기 목록</h1>
+    <p class="muted">체크하면 '준비 완료'로 표시돼요. 남은 재료는 아래 버튼으로 쿠팡에서 담을 수 있어요.</p>
+    <p class="muted" style="font-size:12px;margin:2px 0 0">쿠팡 링크는 파트너스 활동의 일환으로 일정액의 수수료를 받을 수 있습니다.</p>
+    <div class="cart-add">
+      <input id="cartInput" type="text" placeholder="재료 직접 추가 (예: 대파 1대)" />
+      <button id="cartAddBtn">추가</button>
+    </div>
+    <div class="cart-actions">
+      <button id="cartSelectAll" class="ghost">✓ 전체 완료</button>
+    </div>
+    <div id="cartList"></div>
+    <div class="cart-actions">
+      <button id="cartCopy" class="ghost">📋 복사</button>
+      <button id="cartClearChecked" class="ghost">✔ 완료 항목 삭제</button>
+      <button id="cartClearAll" class="ghost danger">전체 비우기</button>
+    </div>
+    <button id="cartFab" class="cart-fab">🛒 쿠팡에서 담기</button>
+  </main>
+
+  <!-- 레시피 모달 -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <button class="modal-close" id="modalClose">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <footer class="foot">유튜브 데이터 · 재료/조리법 요약은 참고용이에요. 정확한 계량은 원본 영상을 확인하세요. 쿠팡 링크는 파트너스 활동의 일환으로 수수료를 받을 수 있습니다.</footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
