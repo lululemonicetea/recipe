@@ -163,3 +163,18 @@ body {
 .toast { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 80;
   background: #222; color: #fff; padding: 12px 20px; border-radius: 30px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
 .foot { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 16px; }
+
+/* 저장한 영상: 좌(카드) + 우(자동 레시피) */
+#savedTopGrid { display: flex; flex-direction: column; gap: 14px; }
+.saved-row { display: flex; gap: 14px; align-items: stretch; }
+.saved-left { width: 300px; flex: none; }
+.saved-right { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px; }
+.saved-right .recipe h2 { font-size: 17px; margin: 0 0 4px; }
+.saved-right .ing-list li { padding: 7px 4px; font-size: 14px; }
+.saved-right .steps li { padding-bottom: 8px; font-size: 14px; }
+.mini-loading { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; padding: 12px 0; }
+@media (max-width: 640px) {
+  .saved-row { flex-direction: column; }
+  .saved-left { width: 100%; }
+}

@@ -1,5 +1,5 @@
 // 간단한 오프라인 캐시 — 앱 껍데기는 캐시, API는 항상 네트워크
-const CACHE = "recipe-tube-v1";
+const CACHE = "recipe-tube-v2";
 const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", e => {

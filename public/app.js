@@ -108,11 +108,22 @@ async function doSearch(query, append = false) {
 
 function renderSavedTop(q) {
   const qt = tokenize(q);
-  const matches = saved.filter(s => overlaps(qt, s.queryTokens || []));
+  const matches = saved.filter(s => overlaps(qt, s.queryTokens || [])).slice(0, 4);
   const wrap = $("#savedTop"), grid = $("#savedTopGrid");
   grid.innerHTML = "";
   if (matches.length === 0) { wrap.classList.add("hidden"); return; }
-  matches.forEach(v => { lastResults.set(v.id, v); grid.appendChild(card(v, true)); });
+  matches.forEach(v => {
+    lastResults.set(v.id, v);
+    const row = el("div", "saved-row");
+    const left = el("div", "saved-left");
+    left.appendChild(card(v, true));
+    const right = el("div", "saved-right");
+    right.innerHTML = '<div class="mini-loading"><span class="spinner"></span><span>레시피 불러오는 중…</span></div>';
+    row.appendChild(left);
+    row.appendChild(right);
+    grid.appendChild(row);
+    loadInlineRecipe(v.id, right);
+  });
   wrap.classList.remove("hidden");
 }
 
@@ -204,51 +215,71 @@ async function openRecipe(id) {
   }
 }
 
-function renderModal() {
-  const d = modalState.recipe, m = modalState.mult;
+// 재료/순서 HTML 생성 (모달 + 저장영상 인라인 공용)
+function recipeBodyHTML(d, m, opts = {}) {
   const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount));
   const steps = (d.steps || []).filter(Boolean);
   const tips = (d.tips || []).filter(Boolean);
   const badge = d.source === "ai" ? '<span class="pill ai">AI 요약</span>' : '<span class="pill text">설명 기반</span>';
-  $("#modalBody").innerHTML = `
-    <div class="recipe">
-      <h2>${esc(d.dish || "레시피")}</h2>
-      <div class="sub">
-        ${badge}
-        ${d.servings ? `<span>👥 <b>${esc(d.servings)}</b></span>` : ""}
-        ${d.totalTime ? `<span>⏱ <b>${esc(d.totalTime)}</b></span>` : ""}
-        ${d.difficulty ? `<span>🔥 <b>${esc(d.difficulty)}</b></span>` : ""}
-      </div>
-      ${d.aiError ? `<div class="note">${esc(d.aiError)}</div>` : ""}
-      ${d.note ? `<div class="note">${esc(d.note)}</div>` : ""}
-
-      ${ing.length ? `
-      <div class="section-h">
-        <h3>🧺 재료</h3>
-        <div class="serv">분량 <button data-mult="-1">－</button> <b>×${m}</b> <button data-mult="1">＋</button></div>
-      </div>
-      <ul class="ing-list">
-        ${ing.map(i => `<li><span>${esc(i.item || "")}</span><span class="amt">${esc(scaleAmount(i.amount, m) || "")}</span></li>`).join("")}
-      </ul>` : ""}
-
-      ${steps.length ? `
-      <div class="section-h"><h3>👩‍🍳 조리 순서</h3></div>
-      <ol class="steps">${steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
-
-      ${tips.length ? `<div class="tips"><b>💡 팁</b><ul>${tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}
-
-      <div class="modal-cta">
-        <a class="cta-watch" href="${esc(d._url)}" target="_blank" rel="noopener">▶ 영상에서 보기</a>
-        ${ing.length ? `<button class="cta-cart" id="toCart">🛒 재료 장보기 담기</button>` : ""}
-      </div>
+  const empty = !ing.length && !steps.length;
+  const serv = opts.stepper && ing.length
+    ? `<div class="serv">분량 <button data-mult="-1">－</button> <b>×${m}</b> <button data-mult="1">＋</button></div>` : "";
+  return `
+    <h2>${esc(d.dish || "레시피")}</h2>
+    <div class="sub">
+      ${badge}
+      ${d.servings ? `<span>👥 <b>${esc(d.servings)}</b></span>` : ""}
+      ${d.totalTime ? `<span>⏱ <b>${esc(d.totalTime)}</b></span>` : ""}
+      ${d.difficulty ? `<span>🔥 <b>${esc(d.difficulty)}</b></span>` : ""}
+    </div>
+    ${d.aiError ? `<div class="note">${esc(d.aiError)}</div>` : ""}
+    ${d.note ? `<div class="note">${esc(d.note)}</div>` : ""}
+    ${empty && !d.note ? `<div class="note">자막·설명이 부족해 정리할 재료·순서를 찾지 못했어요. ‘영상에서 보기’로 확인해 주세요.</div>` : ""}
+    ${ing.length ? `
+    <div class="section-h"><h3>🧺 재료</h3>${serv}</div>
+    <ul class="ing-list">
+      ${ing.map(i => `<li><span>${esc(i.item || "")}</span><span class="amt">${esc(scaleAmount(i.amount, m) || "")}</span></li>`).join("")}
+    </ul>` : ""}
+    ${steps.length ? `
+    <div class="section-h"><h3>👩‍🍳 조리 순서</h3></div>
+    <ol class="steps">${steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
+    ${tips.length ? `<div class="tips"><b>💡 팁</b><ul>${tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}
+    <div class="modal-cta">
+      <a class="cta-watch" href="${esc(d._url || ("https://www.youtube.com/watch?v=" + (d.videoId || "")))}" target="_blank" rel="noopener">▶ 영상에서 보기</a>
+      ${ing.length ? `<button class="cta-cart">🛒 재료 장보기 담기</button>` : ""}
     </div>`;
+}
 
-  document.querySelectorAll("[data-mult]").forEach(b => b.onclick = () => {
-    modalState.mult = Math.max(0.5, Math.round((modalState.mult + 0.5 * +b.dataset.mult) * 2) / 2);
-    renderModal();
-  });
-  const tc = $("#toCart");
+function wireRecipe(scope, d, m, isModal) {
+  if (isModal) {
+    scope.querySelectorAll("[data-mult]").forEach(b => b.onclick = () => {
+      modalState.mult = Math.max(0.5, Math.round((modalState.mult + 0.5 * +b.dataset.mult) * 2) / 2);
+      renderModal();
+    });
+  }
+  const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount));
+  const tc = scope.querySelector(".cta-cart");
   if (tc) tc.onclick = () => addIngredientsToCart(ing, d.dish, m);
+}
+
+// 저장한 영상: 오른쪽에 레시피 자동 표시
+async function loadInlineRecipe(id, container) {
+  try {
+    const res = await fetch(`/api/summarize?videoId=${id}`);
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || "요약 실패");
+    d._url = (lastResults.get(id) || {}).url || `https://www.youtube.com/watch?v=${id}`;
+    container.innerHTML = `<div class="recipe compact">${recipeBodyHTML(d, 1, { stepper: false })}</div>`;
+    wireRecipe(container, d, 1, false);
+  } catch (e) {
+    container.innerHTML = `<div class="note">⚠ ${esc(e.message)}</div>`;
+  }
+}
+
+function renderModal() {
+  const d = modalState.recipe, m = modalState.mult;
+  $("#modalBody").innerHTML = `<div class="recipe">${recipeBodyHTML(d, m, { stepper: true })}</div>`;
+  wireRecipe($("#modalBody"), d, m, true);
 }
 
 function closeModal() { $("#modal").classList.add("hidden"); document.body.style.overflow = ""; }

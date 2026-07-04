@@ -27,8 +27,8 @@ async function getTranscript(videoId) {
   }
 }
 
-function buildPrompt(title, description, transcript) {
-  return `당신은 요리 레시피 정리 전문가입니다. 아래 유튜브 요리 영상의 제목/설명/자막을 바탕으로
+function buildPrompt(title, description, tags, transcript) {
+  return `당신은 요리 레시피 정리 전문가입니다. 아래 유튜브 요리 영상의 제목/설명/태그/자막을 바탕으로
 실제로 따라 할 수 있는 레시피를 정리하세요. 정보가 없으면 지어내지 말고 비워두세요.
 반드시 아래 JSON 형식으로만, 한국어로 답하세요.
 
@@ -48,17 +48,20 @@ ${title}
 [영상 설명]
 ${(description || "").slice(0, 3000)}
 
+[태그]
+${tags || "(없음)"}
+
 [자막(일부)]
 ${transcript || "(자막 없음)"}
 `;
 }
 
-async function summarizeWithGemini(title, description, transcript) {
+async function summarizeWithGemini(title, description, tags, transcript) {
   const key = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
   const body = {
-    contents: [{ parts: [{ text: buildPrompt(title, description, transcript) }] }],
+    contents: [{ parts: [{ text: buildPrompt(title, description, tags, transcript) }] }],
     generationConfig: { responseMimeType: "application/json", temperature: 0.2, maxOutputTokens: 2048 },
   };
   const r = await fetch(endpoint, {
@@ -112,7 +115,6 @@ function summarizeFromText(title, description) {
       if (line.length > 3) steps.push(line.replace(/^\d+[.)]\s*/, ""));
     }
   }
-  // 재료 섹션을 못 찾았으면 분량 패턴이 있는 줄이라도 긁는다.
   if (ingredients.length === 0) {
     for (const raw of lines) {
       const line = raw.replace(/^[-•*▶️▪️·◦‣\s]+/, "").trim();
@@ -126,9 +128,6 @@ function summarizeFromText(title, description) {
     ingredients: ingredients.slice(0, 40),
     steps: steps.slice(0, 30),
     tips: [],
-    note: ingredients.length === 0 && steps.length === 0
-      ? "이 영상 설명에는 정리된 재료/순서가 없어요. 영상을 직접 확인해 주세요. (AI 키를 넣으면 자막으로 요약합니다)"
-      : "",
   };
 }
 
@@ -152,12 +151,13 @@ export default async function handler(req, res) {
 
     const title = sn.title || "";
     const description = sn.description || "";
+    const tags = (sn.tags || []).join(", ");
 
     let data;
     if (process.env.GEMINI_API_KEY) {
       try {
         const transcript = await getTranscript(videoId);
-        data = await summarizeWithGemini(title, description, transcript);
+        data = await summarizeWithGemini(title, description, tags, transcript);
       } catch (e) {
         data = summarizeFromText(title, description);
         data.aiError = "AI 요약 실패로 설명글 기반으로 대체했습니다: " + (e?.message || "");
@@ -168,6 +168,13 @@ export default async function handler(req, res) {
 
     data.videoId = videoId;
     data.channel = sn.channelTitle || "";
+
+    const noIng = !(data.ingredients || []).some(i => i && (i.item || i.amount));
+    const noStep = !((data.steps || []).length);
+    if (noIng && noStep && !data.note) {
+      data.note = "이 영상은 자막·설명이 부족해 자동으로 정리할 재료·순서를 찾지 못했어요. ‘영상에서 보기’로 확인해 주세요.";
+    }
+
     cache.set(videoId, { at: Date.now(), data });
     return res.status(200).json(data);
   } catch (e) {
