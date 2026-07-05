@@ -299,3 +299,8 @@ body {
   display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 700; }
 .cart-list li.done .ck { background: var(--brand); border-color: var(--brand); }
 .have { font-size: 11px; color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent); padding: 2px 7px; border-radius: 10px; }
+
+/* 장보기: 개별 재료 쿠팡 버튼(살 것만) */
+.cp-btn { flex: none; border: 0; background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand);
+  border-radius: 8px; padding: 5px 9px; font-size: 14px; cursor: pointer; }
+.cp-btn:active { transform: scale(.95); }

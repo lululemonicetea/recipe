@@ -376,8 +376,8 @@ function renderCart() {
       const ul = el("ul", "cart-list");
       items.forEach(item => {
         const li = el("li", item.done ? "done" : "");
-        li.innerHTML = `<span class="ck">${item.done ? "✓" : ""}</span><label>${esc(item.text)}</label>${item.done ? '<span class="have">있음</span>' : ""}<button class="del" data-del="${item.id}" aria-label="삭제">🗑</button>`;
-        li.onclick = e => { if (e.target.closest("[data-del]")) return; item.done = !item.done; store.set("rt_cart", cart); updateCounts(); renderCart(); };
+        li.innerHTML = `<span class="ck">${item.done ? "✓" : ""}</span><label>${esc(item.text)}</label>${item.done ? '<span class="have">있음</span>' : `<button class="cp-btn" data-cp="${item.id}" aria-label="쿠팡에서 구매">🛒</button>`}<button class="del" data-del="${item.id}" aria-label="삭제">🗑</button>`;
+        li.onclick = e => { if (e.target.closest("[data-del]") || e.target.closest("[data-cp]")) return; item.done = !item.done; store.set("rt_cart", cart); updateCounts(); renderCart(); };
         ul.appendChild(li);
       });
       g.appendChild(ul);
@@ -387,6 +387,7 @@ function renderCart() {
   list.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
     cart = cart.filter(c => c.id !== b.dataset.del); store.set("rt_cart", cart); updateCounts(); renderCart();
   });
+  list.querySelectorAll("[data-cp]").forEach(b => b.onclick = e => { e.stopPropagation(); const it = cart.find(c => c.id === b.dataset.cp); if (it) goCoupang([it.name || it.text]); });
 }
 
 $("#cartSelectAll").onclick = () => {
@@ -447,11 +448,7 @@ function goCoupang(names) {
     .then(d => { const u = (d.items && d.items[0] && d.items[0].url) || fallback; if (w) w.location = u; else location.href = u; toast("쿠팡으로 이동 · 재료 목록을 복사했어요"); })
     .catch(() => { if (w) w.location = fallback; });
 }
-$("#cartFab").onclick = () => {
-  const remain = cart.filter(c => !c.done);
-  if (!remain.length) return toast("모든 재료가 준비됐어요 🎉");
-  goCoupang(remain.map(c => c.name || c.text));
-};
+$("#cartFab").onclick = openCoupang;
 
 
 $("#cartAddBtn").onclick = () => {
