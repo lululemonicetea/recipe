@@ -609,9 +609,9 @@ function renderHome() {
   const start = new Date().getDate() % SUGGEST.length;
   const sug = [...SUGGEST.slice(start), ...SUGGEST.slice(0, start)].slice(0, 10);
   let html = "";
+  html += `<div class="home-block"><h2>이런 건 어때요?</h2><div class="history suggest">${sug.map(s => `<span class="chip" data-sug="${esc(s)}">${esc(s)}</span>`).join("")}</div></div>`;
   if (recent.length) html += `<div class="home-block"><h2>🕘 최근 본 레시피</h2><div class="grid" id="recentGrid"></div></div>`;
   html += `<div class="home-block"><h2>🔥 요즘 인기</h2><div class="grid" id="trendGrid"><div class="status"><span class="spinner"></span></div></div></div>`;
-  html += `<div class="home-block"><h2>이런 건 어때요?</h2><div class="history">${sug.map(s => `<span class="chip" data-sug="${esc(s)}">${esc(s)}</span>`).join("")}</div></div>`;
   home.innerHTML = html;
   if (recent.length) { const rg = $("#recentGrid"); recent.slice(0, 3).forEach(v => { lastResults.set(v.id, v); rg.appendChild(card(v)); }); }
   home.querySelectorAll("[data-sug]").forEach(c => c.onclick = () => doSearch(c.dataset.sug));

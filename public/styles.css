@@ -182,7 +182,7 @@ body {
 /* 모바일: 하단 탭바 + 터치 최적화 */
 .tab-i { display: none; }
 @media (max-width: 640px) {
-  .topbar { padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); }
+  .topbar { padding: 10px 12px; padding-top: calc(env(safe-area-inset-top) + 16px); }
   .brand { margin-right: auto; }
   .brand-name { font-size: 16px; }
   .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; margin: 0; gap: 0;
@@ -304,3 +304,7 @@ body {
 .cp-btn { flex: none; border: 0; background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand);
   border-radius: 8px; padding: 5px 9px; font-size: 14px; cursor: pointer; }
 .cp-btn:active { transform: scale(.95); }
+
+/* 추천 칩: PC 1줄 / 모바일 2줄로 제한 */
+.suggest { overflow: hidden; max-height: 34px; }
+@media (max-width: 640px) { .suggest { max-height: 70px; } }
