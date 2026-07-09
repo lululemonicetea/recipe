@@ -308,3 +308,23 @@ body {
 /* 추천 칩: PC 1줄 / 모바일 2줄로 제한 */
 .suggest { overflow: hidden; max-height: 34px; }
 @media (max-width: 640px) { .suggest { max-height: 70px; } }
+
+/* 온보딩 */
+.onboard { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.ob-card { background: var(--surface); border-radius: 20px; padding: 28px 24px; max-width: 380px; width: 100%; text-align: center; }
+.ob-emoji { font-size: 48px; }
+.ob-card h2 { margin: 8px 0 16px; font-size: 20px; }
+.ob-list { list-style: none; padding: 0; margin: 0 0 20px; text-align: left; }
+.ob-list li { padding: 10px 2px; border-bottom: 1px solid var(--border); font-size: 15px; }
+.ob-start { width: 100%; padding: 14px; border: 0; border-radius: 12px; font-size: 16px; font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); cursor: pointer; }
+/* 평점 바 */
+.rate-bar { position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: 55; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; box-shadow: var(--shadow); padding: 12px 14px; display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.rate-bar span { font-size: 14px; }
+.rb-btns { display: flex; gap: 8px; }
+.r-yes { border: 0; background: var(--brand); color: #fff; padding: 8px 14px; border-radius: 9px; font-weight: 700; cursor: pointer; }
+.r-no { border: 1px solid var(--border); background: var(--surface); color: var(--muted); padding: 8px 12px; border-radius: 9px; cursor: pointer; }
+@media (min-width: 641px) { .rate-bar { left: auto; right: 20px; bottom: 20px; max-width: 420px; } }
+
+/* 검색 안내 문구 */
+.search-hint { font-size: 13px; color: var(--muted); margin: 8px 2px 0; }

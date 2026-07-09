@@ -6,6 +6,13 @@
   <meta name="theme-color" content="#ff5722" />
   <title>레시피튜브 · 유튜브 요리 레시피</title>
   <meta name="description" content="유튜브 인기 요리 영상을 검색하고, 재료·조리법을 요약해 보고, 좋은 영상을 저장하세요." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="레시피튜브" />
+  <meta property="og:title" content="레시피튜브 — 유튜브 요리 레시피" />
+  <meta property="og:description" content="유튜브 인기 요리 영상을 검색하고 재료·조리법을 한눈에. 저장하고 장보기까지." />
+  <meta property="og:image" content="https://recipe-blush-ten.vercel.app/og-image.png" />
+  <meta property="og:url" content="https://recipe-blush-ten.vercel.app/" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/favicon-64.png" sizes="64x64" type="image/png" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
@@ -29,9 +36,10 @@
   <main id="view-search" class="view active">
     <section class="search-hero">
       <div class="search-box">
-        <input id="q" type="search" placeholder="예: 김치찌개, 마라탕, 크림파스타…" autocomplete="off" />
+        <input id="q" type="search" placeholder="메뉴 이름 또는 유튜브 링크로 검색" autocomplete="off" />
         <button id="searchBtn">검색</button>
       </div>
+      <div class="search-hint">💡 메뉴 이름(예: 김치찌개)이나 유튜브 영상 링크를 붙여넣어 검색해보세요</div>
       <div class="controls">
         <label>정렬
           <select id="order">
@@ -71,7 +79,7 @@
   <main id="view-cart" class="view">
     <h1 class="view-title">🛒 장보기 목록</h1>
     <p class="muted">재료 줄을 누르면 '있음(준비완료)'으로 체크돼요. 체크 안 한 재료는 아래 버튼으로 쿠팡에서 살 수 있어요.</p>
-    <p class="muted" style="font-size:12px;margin:2px 0 0">쿠팡 링크는 파트너스 활동의 일환으로 일정액의 수수료를 받을 수 있습니다.</p>
+    <p class="muted" style="font-size:12px;margin:2px 0 0">쿠팡 링크는 파트너스 활동의 일환으로 일정액의 수수료를 받을 수 있습니다. · <a href="/privacy.html" style="color:inherit;text-decoration:underline">개인정보처리방침</a></p>
     <div class="cart-add">
       <input id="cartInput" type="text" placeholder="재료 직접 추가 (예: 대파 1대)" />
       <button id="cartAddBtn">추가</button>
@@ -103,7 +111,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <footer class="foot">유튜브 데이터 · 재료/조리법 요약은 참고용이에요. 정확한 계량은 원본 영상을 확인하세요. 쿠팡 링크는 파트너스 활동의 일환으로 수수료를 받을 수 있습니다. · <b>빌드 v25</b></footer>
+  <footer class="foot">유튜브 데이터 · 재료/조리법 요약은 참고용이에요. 정확한 계량은 원본 영상을 확인하세요. 쿠팡 링크는 파트너스 활동의 일환으로 수수료를 받을 수 있습니다. · <b>빌드 v27</b></footer>
 
   <script src="/config.js"></script>
   <script src="/app.js"></script>

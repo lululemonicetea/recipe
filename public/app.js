@@ -227,6 +227,7 @@ async function fetchSummary(id) {
 async function openRecipe(id) {
   const v = lastResults.get(id);
   trackRecent(v);
+  maybeRatePrompt();
   $("#modal").classList.remove("hidden");
   document.body.style.overflow = "hidden";
   $("#modalBody").innerHTML = '<div style="text-align:center;padding:50px"><span class="spinner"></span><p class="muted">영상을 보고 재료·조리법을 정리하고 있어요…</p></div>';
@@ -292,7 +293,7 @@ function wireRecipe(scope, d, m, isModal) {
   const ck = scope.querySelector(".cta-cook");
   if (ck) ck.onclick = () => startCook(d);
   const sh = scope.querySelector(".cta-share");
-  if (sh) sh.onclick = () => shareRecipe(d);
+  if (sh) sh.onclick = () => shareRecipeCard(d);
 }
 
 // 저장한 영상: 오른쪽에 레시피 자동 표시
@@ -587,27 +588,31 @@ function shareCartList() {
 
 /* ---------- 홈(추천·최근본·인기) ---------- */
 let recent = store.get("rt_recent", []);
-const SUGGEST = ["김치찌개","된장찌개","제육볶음","김치볶음밥","마라탕","크림파스타","닭볶음탕","계란찜","오므라이스","떡볶이","김밥","불고기","비빔국수","순두부찌개","김치전"];
+const SUGGEST = ["김치찌개","된장찌개","제육볶음","김치볶음밥","마라탕","크림파스타","닭볶음탕","계란찜","오므라이스","떡볶이","김밥","불고기","비빔국수","순두부찌개","김치전","닭갈비","부대찌개","잡채","카레","볶음밥","미역국","갈비찜","감자탕","어묵탕","콩나물국밥","로제파스타","스크램블에그","두부조림","가지볶음","애호박전","삼겹살","라볶이","고등어조림","닭한마리","간장계란밥"];
+function seededShuffle(arr, seed) { const a = arr.slice(); let s = seed || 1; const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 function trackRecent(v) {
   if (!v) return;
   recent = [{ id: v.id, title: v.title, channel: v.channel, thumbnail: v.thumbnail, url: v.url, durationText: v.durationText, viewCount: v.viewCount, publishedAt: v.publishedAt }, ...recent.filter(r => r.id !== v.id)].slice(0, 12);
   store.set("rt_recent", recent);
 }
+const TREND_QUERIES = ["인기 요리 레시피","간단 자취 요리","백종원 레시피","다이어트 요리","10분 요리","집밥 반찬","에어프라이어 요리","야식 레시피","안주 요리","캠핑 요리"];
 async function loadTrending() {
   const today = new Date().toISOString().slice(0, 10);
+  const q = TREND_QUERIES[new Date().getDate() % TREND_QUERIES.length];
   const cache = store.get("rt_trend", null);
   if (cache && cache.day === today && cache.items) return cache.items;
   try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent("인기 요리 레시피")}&order=views`);
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&order=views`);
     const data = await res.json();
     if (res.ok && data.items) { const items = data.items.slice(0, 8); store.set("rt_trend", { day: today, items }); return items; }
   } catch {}
   return (cache && cache.items) || [];
 }
+
 function renderHome() {
   const home = $("#home"); if (!home) return;
-  const start = new Date().getDate() % SUGGEST.length;
-  const sug = [...SUGGEST.slice(start), ...SUGGEST.slice(0, start)].slice(0, 10);
+  const seed = +(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
+  const sug = seededShuffle(SUGGEST, seed).slice(0, 10);
   let html = "";
   html += `<div class="home-block"><h2>이런 건 어때요?</h2><div class="history suggest">${sug.map(s => `<span class="chip" data-sug="${esc(s)}">${esc(s)}</span>`).join("")}</div></div>`;
   if (recent.length) html += `<div class="home-block"><h2>🕘 최근 본 레시피</h2><div class="grid" id="recentGrid"></div></div>`;
@@ -630,6 +635,68 @@ function goHome() {
   showView("search"); showHome();
 }
 
+/* ---------- 이미지 카드 공유 + 온보딩 + 평점 ---------- */
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+function wrapText(c, text, x, y, maxW, lh) {
+  const chars = [...String(text)]; let line = "";
+  for (const ch of chars) { const t = line + ch; if (c.measureText(t).width > maxW && line) { c.fillText(line, x, y); y += lh; line = ch; } else line = t; }
+  if (line) { c.fillText(line, x, y); y += lh; }
+  return y;
+}
+async function shareRecipeCard(d) {
+  try {
+    const W = 1080, H = 1350, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const c = cv.getContext("2d");
+    const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#ff8a65"); g.addColorStop(1, "#ff5722");
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    const m = 56; c.fillStyle = "#fff"; roundRect(c, m, m, W - 2 * m, H - 2 * m, 40); c.fill();
+    c.textBaseline = "top";
+    try { const lg = await loadImg("/icon-192.png"); c.drawImage(lg, m + 40, m + 44, 104, 104); } catch {}
+    c.fillStyle = "#ff5722"; c.font = "700 40px sans-serif"; c.fillText("레시피튜브", m + 164, m + 76);
+    c.fillStyle = "#1c1c1e"; c.font = "800 62px sans-serif";
+    let y = wrapText(c, d.dish || "레시피", m + 50, m + 210, W - 2 * m - 100, 74);
+    y += 24; c.fillStyle = "#ff5722"; c.font = "700 36px sans-serif"; c.fillText("🧺 재료", m + 50, y); y += 66;
+    c.fillStyle = "#333"; c.font = "400 34px sans-serif";
+    const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount)).slice(0, 8);
+    if (ing.length) ing.forEach(i => { c.fillText("·  " + (i.item || "") + "   " + (i.amount || ""), m + 50, y); y += 52; });
+    else c.fillText("영상에서 전체 레시피를 확인하세요", m + 50, y);
+    c.fillStyle = "#888"; c.font = "400 28px sans-serif"; c.fillText("레시피튜브 앱에서 영상·전체 레시피 보기", m + 50, H - m - 96);
+    c.fillStyle = "#ff5722"; c.font = "600 30px sans-serif"; c.fillText("recipe-blush-ten.vercel.app", m + 50, H - m - 56);
+    const blob = await new Promise(r => cv.toBlob(r, "image/png"));
+    const url = location.origin + "/?recipe=" + (d.videoId || d._id || "");
+    const file = new File([blob], "recipe.png", { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: d.dish || "레시피튜브", text: (d.dish || "레시피") + " — 레시피튜브\n" + url });
+    } else {
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = (d.dish || "recipe") + ".png"; a.click();
+      toast("이미지를 저장했어요 — 공유해보세요");
+    }
+  } catch (e) { shareRecipe(d); }
+}
+function showOnboarding() {
+  if (store.get("rt_onboarded", false)) return;
+  const ov = el("div", "onboard");
+  ov.innerHTML = `<div class="ob-card"><div class="ob-emoji">🍳</div><h2>레시피튜브에 오신 걸 환영해요</h2><ul class="ob-list"><li>🔎 요리 이름을 검색하면 <b>성과 좋은 유튜브 영상</b>이 떠요</li><li>🧾 각 영상의 <b>재료·조리법을 AI가 요약</b>해줘요</li><li>⭐ 저장하고 🛒 <b>장보기</b>로 재료까지 담아요</li></ul><button class="ob-start">시작하기</button></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector(".ob-start").onclick = () => { store.set("rt_onboarded", true); ov.remove(); };
+}
+function maybeRatePrompt() {
+  if (store.get("rt_rated", false)) return;
+  const n = store.get("rt_opencount", 0) + 1; store.set("rt_opencount", n);
+  if (n !== 3) return;
+  setTimeout(() => {
+    if (store.get("rt_rated", false)) return;
+    const bar = el("div", "rate-bar");
+    bar.innerHTML = `<span>앱이 마음에 드세요? ⭐ 평점이 큰 힘이 돼요</span><div class="rb-btns"><button class="r-yes">평점 남기기</button><button class="r-no">나중에</button></div>`;
+    document.body.appendChild(bar);
+    bar.querySelector(".r-yes").onclick = () => { store.set("rt_rated", true); const u = window.PLAY_URL || ""; if (u) window.open(u, "_blank", "noopener"); else shareText("레시피튜브", "레시피튜브 — 유튜브 요리 레시피 앱", location.origin); bar.remove(); };
+    bar.querySelector(".r-no").onclick = () => bar.remove();
+  }, 1500);
+}
+
 /* ---------- 초기화 ---------- */
 applyTheme(); updateCounts(); renderHistory(); showHome();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+showOnboarding();
+{ const p = new URLSearchParams(location.search); if (p.get("recipe")) openRecipe(p.get("recipe")); else if (p.get("q")) doSearch(p.get("q")); }
