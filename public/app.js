@@ -316,7 +316,7 @@ function renderModal() {
   wireRecipe($("#modalBody"), d, m, true);
 }
 
-function closeModal(fromPop) { $("#modal").classList.add("hidden"); document.body.style.overflow = ""; if (fromPop !== true) history.back(); }
+function closeModal(fromPop) { $("#modal").classList.add("hidden"); document.body.style.overflow = ""; if (fromPop !== true) window.history.back(); }
 $("#modalClose").onclick = closeModal;
 $("#modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
@@ -531,7 +531,7 @@ function startCook(d) {
 function stopCook(fromPop) {
   clearInterval(cook.timer); releaseAwake();
   $("#cookMode").classList.add("hidden"); document.body.style.overflow = ""; cook.recipe = null;
-  if (fromPop !== true) history.back();
+  if (fromPop !== true) window.history.back();
 }
 function beep() {
   try {
@@ -680,8 +680,7 @@ function rouletteSectionHtml() {
 function wireRoulette() { const sp = $("#rlSpin"); if (sp) sp.onclick = spinRoulette; loadRoulettePool(); }
 function renderFridge() {
   const b = $("#fridgeBlock"); if (!b) return;
-  b.innerHTML = `<div class="eat-glabel">🧊 냉장고 파먹기</div>
-    <div class="fridge-input"><input id="fridgeInput" type="text" placeholder="가진 재료 입력 (예: 애호박, 참치)"><button id="fridgeAdd">추가</button></div>
+  b.innerHTML = `<div class="fridge-input"><input id="fridgeInput" type="text" placeholder="가진 재료 입력 (예: 애호박, 참치)"><button id="fridgeAdd">추가</button></div>
     ${fridgeSel.length ? `<div class="fridge-sel">${fridgeSel.map(f => `<span class="chip on" data-fr-rm="${esc(f)}">${esc(f)} ✕</span>`).join("")}</div>` : ""}
     <div class="history">${FRIDGE_ITEMS.map(f => `<span class="chip ${fridgeSel.includes(f) ? "on" : ""}" data-fr="${esc(f)}">${esc(f)}</span>`).join("")}</div>
     <button class="fridge-go" id="fridgeGo">🍳 이 재료로 레시피 찾기${fridgeSel.length ? ` (${fridgeSel.length})` : ""}</button>`;
@@ -702,7 +701,7 @@ function renderEat() {
   const acc = (t, body) => `<div class="acc"><div class="acc-head"><span>${t}</span><span class="acc-chev">▾</span></div><div class="acc-body">${body}</div></div>`;
   v.innerHTML = `<h1 class="view-title">🍽 오늘 뭐 먹지?</h1><p class="muted">원하는 방식을 열어서 골라보세요.</p>`
     + acc("🍽 상황별", situations)
-    + acc("🧊 재료로 · 냉장고 파먹기", `<div id="fridgeBlock"></div>`)
+    + acc("🧊 냉장고 파먹기", `<div id="fridgeBlock"></div>`)
     + acc("📂 카테고리", catBody);
   v.querySelectorAll(".acc-head").forEach(h => h.onclick = () => h.parentElement.classList.toggle("open"));
   v.querySelectorAll("[data-eat]").forEach(c => c.onclick = () => { doSearch(c.dataset.eat); showView("search"); });
@@ -778,7 +777,7 @@ function showOnboarding() {
   const ov = el("div", "onboard");
   ov.innerHTML = `<div class="ob-card"><div class="ob-emoji">🍳</div><h2>레시피튜브에 오신 걸 환영해요</h2><ul class="ob-list"><li>🔎 요리 이름을 검색하면 <b>성과 좋은 유튜브 영상</b>이 떠요</li><li>🧾 각 영상의 <b>재료·조리법을 AI가 요약</b>해줘요</li><li>⭐ 저장하고 🛒 <b>장보기</b>로 재료까지 담아요</li></ul><button class="ob-start">시작하기</button></div>`;
   document.body.appendChild(ov); pushOverlay();
-  ov.querySelector(".ob-start").onclick = () => { store.set("rt_onboarded", true); ov.remove(); history.back(); };
+  ov.querySelector(".ob-start").onclick = () => { store.set("rt_onboarded", true); ov.remove(); window.history.back(); };
 }
 function maybeRatePrompt() {
   if (store.get("rt_rated", false)) return;
@@ -794,7 +793,7 @@ function maybeRatePrompt() {
   }, 1500);
 }
 
-function pushOverlay() { try { history.pushState({ ov: 1 }, ""); } catch {} }
+function pushOverlay() { try { window.history.pushState({ ov: 1 }, ""); } catch {} }
 window.addEventListener("popstate", () => {
   const cm = document.getElementById("cookMode");
   if (cm && !cm.classList.contains("hidden")) { stopCook(true); return; }
