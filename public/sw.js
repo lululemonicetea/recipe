@@ -1,5 +1,5 @@
 // 네트워크 우선 캐시 — 배포 시 최신 파일이 바로 반영되고, 오프라인이면 캐시 사용
-const CACHE = "recipe-tube-v33";
+const CACHE = "recipe-tube-v34";
 const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/config.js", "/icon.svg", "/icon-192.png", "/icon-512.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", e => {

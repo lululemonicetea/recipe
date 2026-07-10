@@ -231,6 +231,7 @@ async function openRecipe(id) {
   maybeRatePrompt();
   $("#modal").classList.remove("hidden");
   document.body.style.overflow = "hidden";
+  pushOverlay();
   $("#modalBody").innerHTML = '<div style="text-align:center;padding:50px"><span class="spinner"></span><p class="muted">영상을 보고 재료·조리법을 정리하고 있어요…</p></div>';
   try {
     const data = await fetchSummary(id);
@@ -315,7 +316,7 @@ function renderModal() {
   wireRecipe($("#modalBody"), d, m, true);
 }
 
-function closeModal() { $("#modal").classList.add("hidden"); document.body.style.overflow = ""; }
+function closeModal(fromPop) { $("#modal").classList.add("hidden"); document.body.style.overflow = ""; if (fromPop !== true) history.back(); }
 $("#modalClose").onclick = closeModal;
 $("#modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
@@ -409,6 +410,7 @@ async function openCoupang() {
   if (!remain.length) return toast("모든 재료가 준비됐어요 🎉");
   const names = [...new Set(remain.map(c => c.name || c.text))];
   $("#modal").classList.remove("hidden"); document.body.style.overflow = "hidden";
+  pushOverlay();
   $("#modalBody").innerHTML = '<div style="text-align:center;padding:40px"><span class="spinner"></span><p class="muted">쿠팡 상품 링크를 준비하고 있어요…</p></div>';
   try {
     const res = await fetch(`/api/coupang?q=${encodeURIComponent(names.join("|"))}`);
@@ -484,7 +486,14 @@ function addHistory(q) {
 }
 function renderHistory() {
   const box = $("#history"); box.innerHTML = "";
-  history.forEach(h => { const c = el("span", "chip"); c.textContent = h; c.onclick = () => doSearch(h); box.appendChild(c); });
+  history.forEach(h => {
+    const c = el("span", "chip hist-chip");
+    c.innerHTML = `<span class="hist-q">${esc(h)}</span><span class="hist-x">✕</span>`;
+    c.querySelector(".hist-q").onclick = () => doSearch(h);
+    c.querySelector(".hist-x").onclick = (e) => { e.stopPropagation(); history = history.filter(x => x !== h); store.set("rt_history", history); renderHistory(); };
+    box.appendChild(c);
+  });
+  if (history.length) { const clr = el("span", "chip hist-clear"); clr.textContent = "전체 지우기"; clr.onclick = () => { history = []; store.set("rt_history", history); renderHistory(); }; box.appendChild(clr); }
 }
 
 /* ---------- 공통 ---------- */
@@ -516,11 +525,13 @@ function startCook(d) {
   if (!steps.length) return toast("조리 순서가 없어요");
   cook = { recipe: d, steps, i: 0, wake: null, timer: null, remain: 0 };
   $("#cookMode").classList.remove("hidden"); document.body.style.overflow = "hidden";
+  pushOverlay();
   keepAwake(); renderCook();
 }
-function stopCook() {
+function stopCook(fromPop) {
   clearInterval(cook.timer); releaseAwake();
   $("#cookMode").classList.add("hidden"); document.body.style.overflow = ""; cook.recipe = null;
+  if (fromPop !== true) history.back();
 }
 function beep() {
   try {
@@ -622,6 +633,7 @@ const EAT_GROUPS = [
   { icon: "🌶", title: "기분·맛", items: [{ label: "얼큰한 거", q: "얼큰한 요리 레시피" }, { label: "매운 거", q: "매운 음식 레시피" }, { label: "달달한 거", q: "달달한 디저트 레시피" }, { label: "느끼한 거", q: "느끼한 양식 레시피" }, { label: "담백한 거", q: "담백한 요리 레시피" }, { label: "개운한 거", q: "개운한 국물 요리 레시피" }] },
   { icon: "💪", title: "건강", items: [{ label: "다이어트", q: "다이어트 요리 레시피" }, { label: "저칼로리", q: "저칼로리 요리 레시피" }, { label: "고단백", q: "고단백 요리 레시피" }, { label: "채식", q: "채식 요리 레시피" }] },
 ];
+let roulettePool = [], rlSpinning = false, rlLast = null;
 function rouletteCardHtml(v) {
   if (!v) return `<div class="rl-empty">🎲 돌려서 오늘 뭐 먹을지 정해요!</div>`;
   return `<div class="rl-card" data-open="${v.id}"><div class="rl-thumb"><img loading="lazy" src="${esc(v.thumbnail)}" alt="">${v.durationText ? `<span class="dur">${esc(v.durationText)}</span>` : ""}</div><div class="rl-info"><div class="rl-title">${esc(v.title)}</div><div class="rl-ch">${esc(v.channel)}${v.viewCount ? " · " + fmtViews(v.viewCount) : ""}</div></div></div>`;
@@ -685,15 +697,19 @@ function renderEat() {
   const v = $("#view-eat"); if (!v) return;
   const seed = +(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
   const sug = seededShuffle(SUGGEST, seed).slice(0, 12);
-  v.innerHTML = `<h1 class="view-title">🍽 오늘 뭐 먹지?</h1><p class="muted">상황·재료·카테고리로 딱 맞는 레시피를 찾아드려요.</p>`
-    + EAT_GROUPS.map(g => `<div class="eat-group"><div class="eat-glabel">${g.icon} ${g.title}</div><div class="history">${g.items.map(it => `<span class="chip" data-eat="${esc(it.q)}">${esc(it.label)}</span>`).join("")}</div></div>`).join("")
-    + `<div id="fridgeBlock" class="eat-group"></div>`
-    + `<div class="eat-group"><div class="eat-glabel">📂 카테고리</div><div class="history">${CATEGORIES.map(c => `<span class="chip" data-cat="${esc(c.q)}">${esc(c.label)}</span>`).join("")}</div></div>`
-    + `<div class="eat-group"><div class="eat-glabel">💡 이런 건 어때요?</div><div class="history">${sug.map(s => `<span class="chip" data-cat="${esc(s + " 레시피")}">${esc(s)}</span>`).join("")}</div></div>`;
+  const situations = EAT_GROUPS.map(g => `<div class="eat-glabel">${g.icon} ${g.title}</div><div class="history">${g.items.map(it => `<span class="chip" data-eat="${esc(it.q)}">${esc(it.label)}</span>`).join("")}</div>`).join("");
+  const catBody = `<div class="history">${CATEGORIES.map(c => `<span class="chip" data-cat="${esc(c.q)}">${esc(c.label)}</span>`).join("")}${sug.map(s => `<span class="chip" data-cat="${esc(s + " 레시피")}">${esc(s)}</span>`).join("")}</div>`;
+  const acc = (t, body) => `<div class="acc"><div class="acc-head"><span>${t}</span><span class="acc-chev">▾</span></div><div class="acc-body">${body}</div></div>`;
+  v.innerHTML = `<h1 class="view-title">🍽 오늘 뭐 먹지?</h1><p class="muted">원하는 방식을 열어서 골라보세요.</p>`
+    + acc("🍽 상황별", situations)
+    + acc("🧊 재료로 · 냉장고 파먹기", `<div id="fridgeBlock"></div>`)
+    + acc("📂 카테고리", catBody);
+  v.querySelectorAll(".acc-head").forEach(h => h.onclick = () => h.parentElement.classList.toggle("open"));
   v.querySelectorAll("[data-eat]").forEach(c => c.onclick = () => { doSearch(c.dataset.eat); showView("search"); });
   v.querySelectorAll("[data-cat]").forEach(c => c.onclick = () => { doSearch(c.dataset.cat); showView("search"); });
   renderFridge();
 }
+
 function renderHome() {
   const home = $("#home"); if (!home) return;
   let html = rouletteSectionHtml();
@@ -761,8 +777,8 @@ function showOnboarding() {
   if (store.get("rt_onboarded", false)) return;
   const ov = el("div", "onboard");
   ov.innerHTML = `<div class="ob-card"><div class="ob-emoji">🍳</div><h2>레시피튜브에 오신 걸 환영해요</h2><ul class="ob-list"><li>🔎 요리 이름을 검색하면 <b>성과 좋은 유튜브 영상</b>이 떠요</li><li>🧾 각 영상의 <b>재료·조리법을 AI가 요약</b>해줘요</li><li>⭐ 저장하고 🛒 <b>장보기</b>로 재료까지 담아요</li></ul><button class="ob-start">시작하기</button></div>`;
-  document.body.appendChild(ov);
-  ov.querySelector(".ob-start").onclick = () => { store.set("rt_onboarded", true); ov.remove(); };
+  document.body.appendChild(ov); pushOverlay();
+  ov.querySelector(".ob-start").onclick = () => { store.set("rt_onboarded", true); ov.remove(); history.back(); };
 }
 function maybeRatePrompt() {
   if (store.get("rt_rated", false)) return;
@@ -777,6 +793,15 @@ function maybeRatePrompt() {
     bar.querySelector(".r-no").onclick = () => bar.remove();
   }, 1500);
 }
+
+function pushOverlay() { try { history.pushState({ ov: 1 }, ""); } catch {} }
+window.addEventListener("popstate", () => {
+  const cm = document.getElementById("cookMode");
+  if (cm && !cm.classList.contains("hidden")) { stopCook(true); return; }
+  const md = document.getElementById("modal");
+  if (md && !md.classList.contains("hidden")) { closeModal(true); return; }
+  const ob = document.querySelector(".onboard"); if (ob) ob.remove();
+});
 
 /* ---------- 초기화 ---------- */
 applyTheme(); updateCounts(); renderHistory(); showHome();
