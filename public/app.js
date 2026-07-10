@@ -615,12 +615,13 @@ const CATEGORIES = [{ label: "국·찌개", q: "국 찌개 레시피" }, { label
 let fridgeSel = [];
 
 const EAT_GROUPS = [
-  { icon: "⏰", title: "시간대", items: [{ label: "아침", q: "아침 간단 요리 레시피" }, { label: "점심", q: "점심 메뉴 요리 레시피" }, { label: "저녁", q: "저녁 요리 레시피" }, { label: "야식", q: "야식 레시피" }] },
-  { icon: "🍽", title: "상황", items: [{ label: "혼밥", q: "혼밥 간단 요리 레시피" }, { label: "손님상", q: "손님 접대 요리 레시피" }, { label: "술안주", q: "간단 술안주 레시피" }, { label: "다이어트", q: "다이어트 요리 레시피" }, { label: "해장", q: "해장 요리 레시피" }, { label: "도시락", q: "도시락 반찬 레시피" }] },
-  { icon: "🌦", title: "날씨", items: [{ label: "비 오는 날", q: "부침개 전 요리 레시피" }, { label: "추운 날", q: "뜨끈한 국물 요리 레시피" }, { label: "더운 날", q: "시원한 여름 요리 레시피" }] },
-  { icon: "⚡", title: "빠르게", items: [{ label: "시간 없을 때", q: "10분 초간단 요리 레시피" }, { label: "든든하게", q: "든든한 한그릇 요리 레시피" }, { label: "가볍게", q: "가벼운 샐러드 요리 레시피" }] },
+  { icon: "⏰", title: "시간대", items: [{ label: "아침", q: "아침 간단 요리 레시피" }, { label: "브런치", q: "브런치 레시피" }, { label: "점심", q: "점심 메뉴 요리 레시피" }, { label: "저녁", q: "저녁 요리 레시피" }, { label: "야식", q: "야식 레시피" }, { label: "간식", q: "간식 만들기 레시피" }] },
+  { icon: "🍽", title: "상황", items: [{ label: "혼밥", q: "혼밥 간단 요리 레시피" }, { label: "손님상", q: "손님 접대 요리 레시피" }, { label: "술안주", q: "간단 술안주 레시피" }, { label: "해장", q: "해장 요리 레시피" }, { label: "도시락", q: "도시락 반찬 레시피" }, { label: "캠핑", q: "캠핑 요리 레시피" }, { label: "집들이", q: "집들이 음식 레시피" }, { label: "아이반찬", q: "아이 반찬 레시피" }] },
+  { icon: "🌦", title: "날씨·계절", items: [{ label: "비 오는 날", q: "부침개 전 요리 레시피" }, { label: "추운 날", q: "뜨끈한 국물 요리 레시피" }, { label: "더운 날", q: "시원한 여름 요리 레시피" }, { label: "환절기", q: "보양식 레시피" }] },
+  { icon: "⚡", title: "빠르게·간편", items: [{ label: "시간 없을 때", q: "10분 초간단 요리 레시피" }, { label: "원팬", q: "원팬 요리 레시피" }, { label: "전자레인지", q: "전자레인지 요리 레시피" }, { label: "에어프라이어", q: "에어프라이어 요리 레시피" }, { label: "노오븐", q: "노오븐 디저트 레시피" }] },
+  { icon: "🌶", title: "기분·맛", items: [{ label: "얼큰한 거", q: "얼큰한 요리 레시피" }, { label: "매운 거", q: "매운 음식 레시피" }, { label: "달달한 거", q: "달달한 디저트 레시피" }, { label: "느끼한 거", q: "느끼한 양식 레시피" }, { label: "담백한 거", q: "담백한 요리 레시피" }, { label: "개운한 거", q: "개운한 국물 요리 레시피" }] },
+  { icon: "💪", title: "건강", items: [{ label: "다이어트", q: "다이어트 요리 레시피" }, { label: "저칼로리", q: "저칼로리 요리 레시피" }, { label: "고단백", q: "고단백 요리 레시피" }, { label: "채식", q: "채식 요리 레시피" }] },
 ];
-let roulettePool = [], rlSpinning = false, rlLast = null;
 function rouletteCardHtml(v) {
   if (!v) return `<div class="rl-empty">🎲 돌려서 오늘 뭐 먹을지 정해요!</div>`;
   return `<div class="rl-card" data-open="${v.id}"><div class="rl-thumb"><img loading="lazy" src="${esc(v.thumbnail)}" alt="">${v.durationText ? `<span class="dur">${esc(v.durationText)}</span>` : ""}</div><div class="rl-info"><div class="rl-title">${esc(v.title)}</div><div class="rl-ch">${esc(v.channel)}${v.viewCount ? " · " + fmtViews(v.viewCount) : ""}</div></div></div>`;
@@ -661,32 +662,46 @@ async function spinRoulette() {
   };
   step();
 }
+function rouletteSectionHtml() {
+  return `<div class="home-block rl-sec"><h2>🎲 오늘의 룰렛 <span style="font-size:12px;color:var(--muted);font-weight:400">· 유튜브 인기 메뉴 (하루 2번 갱신)</span></h2><div id="rlDisplay" class="rl-display">${rouletteCardHtml(null)}</div><button id="rlSpin" class="rl-spin">🎲 돌리기</button><div id="rlResult" class="rl-result"></div></div>`;
+}
+function wireRoulette() { const sp = $("#rlSpin"); if (sp) sp.onclick = spinRoulette; loadRoulettePool(); }
+function renderFridge() {
+  const b = $("#fridgeBlock"); if (!b) return;
+  b.innerHTML = `<div class="eat-glabel">🧊 냉장고 파먹기</div>
+    <div class="fridge-input"><input id="fridgeInput" type="text" placeholder="가진 재료 입력 (예: 애호박, 참치)"><button id="fridgeAdd">추가</button></div>
+    ${fridgeSel.length ? `<div class="fridge-sel">${fridgeSel.map(f => `<span class="chip on" data-fr-rm="${esc(f)}">${esc(f)} ✕</span>`).join("")}</div>` : ""}
+    <div class="history">${FRIDGE_ITEMS.map(f => `<span class="chip ${fridgeSel.includes(f) ? "on" : ""}" data-fr="${esc(f)}">${esc(f)}</span>`).join("")}</div>
+    <button class="fridge-go" id="fridgeGo">🍳 이 재료로 레시피 찾기${fridgeSel.length ? ` (${fridgeSel.length})` : ""}</button>`;
+  b.querySelectorAll("[data-fr]").forEach(c => c.onclick = () => { const f = c.dataset.fr; if (fridgeSel.includes(f)) fridgeSel = fridgeSel.filter(x => x !== f); else fridgeSel.push(f); renderFridge(); });
+  b.querySelectorAll("[data-fr-rm]").forEach(c => c.onclick = () => { fridgeSel = fridgeSel.filter(x => x !== c.dataset.frRm); renderFridge(); });
+  const inp = $("#fridgeInput"), add = $("#fridgeAdd");
+  const doAdd = () => { (inp.value || "").split(/[,\s]+/).map(s => s.trim()).filter(Boolean).forEach(x => { if (!fridgeSel.includes(x)) fridgeSel.push(x); }); inp.value = ""; renderFridge(); };
+  if (add) add.onclick = doAdd;
+  if (inp) inp.onkeydown = e => { if (e.key === "Enter") doAdd(); };
+  const go = $("#fridgeGo"); if (go) go.onclick = () => { if (!fridgeSel.length) return toast("가진 재료를 입력하거나 선택하세요"); doSearch(fridgeSel.join(" ") + " 레시피"); showView("search"); };
+}
 function renderEat() {
   const v = $("#view-eat"); if (!v) return;
-  v.innerHTML = `<h1 class="view-title">🍽 오늘 뭐 먹지?</h1><p class="muted">상황을 고르면 딱 맞는 레시피를 찾아드려요.</p>`
+  const seed = +(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
+  const sug = seededShuffle(SUGGEST, seed).slice(0, 12);
+  v.innerHTML = `<h1 class="view-title">🍽 오늘 뭐 먹지?</h1><p class="muted">상황·재료·카테고리로 딱 맞는 레시피를 찾아드려요.</p>`
     + EAT_GROUPS.map(g => `<div class="eat-group"><div class="eat-glabel">${g.icon} ${g.title}</div><div class="history">${g.items.map(it => `<span class="chip" data-eat="${esc(it.q)}">${esc(it.label)}</span>`).join("")}</div></div>`).join("")
-    + `<div class="eat-group rl-sec"><div class="eat-glabel">🎲 오늘의 룰렛 <span style="color:var(--muted);font-weight:400">· 유튜브 인기 메뉴 (하루 2번 갱신)</span></div><div id="rlDisplay" class="rl-display">${rouletteCardHtml(null)}</div><button id="rlSpin" class="rl-spin">🎲 돌리기</button><div id="rlResult" class="rl-result"></div></div>`;
+    + `<div id="fridgeBlock" class="eat-group"></div>`
+    + `<div class="eat-group"><div class="eat-glabel">📂 카테고리</div><div class="history">${CATEGORIES.map(c => `<span class="chip" data-cat="${esc(c.q)}">${esc(c.label)}</span>`).join("")}</div></div>`
+    + `<div class="eat-group"><div class="eat-glabel">💡 이런 건 어때요?</div><div class="history">${sug.map(s => `<span class="chip" data-cat="${esc(s + " 레시피")}">${esc(s)}</span>`).join("")}</div></div>`;
   v.querySelectorAll("[data-eat]").forEach(c => c.onclick = () => { doSearch(c.dataset.eat); showView("search"); });
-  const sp = $("#rlSpin"); if (sp) sp.onclick = spinRoulette;
-  loadRoulettePool();
+  v.querySelectorAll("[data-cat]").forEach(c => c.onclick = () => { doSearch(c.dataset.cat); showView("search"); });
+  renderFridge();
 }
-
 function renderHome() {
   const home = $("#home"); if (!home) return;
-  const seed = +(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
-  const sug = seededShuffle(SUGGEST, seed).slice(0, 10);
-  let html = "";
-  html += `<div class="home-block"><h2>🧊 냉장고 파먹기</h2><div class="history fridge-chips">${FRIDGE_ITEMS.map(f => `<span class="chip ${fridgeSel.includes(f) ? "on" : ""}" data-fr="${esc(f)}">${esc(f)}</span>`).join("")}</div><button class="fridge-go" id="fridgeGo">🍳 이 재료로 레시피 찾기${fridgeSel.length ? ` (${fridgeSel.length})` : ""}</button></div>`;
-  html += `<div class="home-block"><h2>📂 카테고리</h2><div class="history">${CATEGORIES.map(c => `<span class="chip" data-cat="${esc(c.q)}">${esc(c.label)}</span>`).join("")}</div></div>`;
-  html += `<div class="home-block"><h2>이런 건 어때요?</h2><div class="history suggest">${sug.map(s => `<span class="chip" data-sug="${esc(s)}">${esc(s)}</span>`).join("")}</div></div>`;
+  let html = rouletteSectionHtml();
   if (recent.length) html += `<div class="home-block"><h2>🕘 최근 본 레시피</h2><div class="grid" id="recentGrid"></div></div>`;
   html += `<div class="home-block"><h2>🔥 요즘 인기</h2><div class="grid" id="trendGrid"><div class="status"><span class="spinner"></span></div></div></div>`;
   home.innerHTML = html;
+  wireRoulette();
   if (recent.length) { const rg = $("#recentGrid"); recent.slice(0, 3).forEach(v => { lastResults.set(v.id, v); rg.appendChild(card(v)); }); }
-  home.querySelectorAll("[data-sug]").forEach(c => c.onclick = () => doSearch(c.dataset.sug));
-  home.querySelectorAll("[data-cat]").forEach(c => c.onclick = () => doSearch(c.dataset.cat));
-  home.querySelectorAll("[data-fr]").forEach(c => c.onclick = () => { const f = c.dataset.fr; if (fridgeSel.includes(f)) { fridgeSel = fridgeSel.filter(x => x !== f); c.classList.remove("on"); } else { fridgeSel.push(f); c.classList.add("on"); } const fg = $("#fridgeGo"); if (fg) fg.textContent = "🍳 이 재료로 레시피 찾기" + (fridgeSel.length ? ` (${fridgeSel.length})` : ""); });
-  const fgBtn = $("#fridgeGo"); if (fgBtn) fgBtn.onclick = () => { if (!fridgeSel.length) return toast("가진 재료를 하나 이상 선택하세요"); doSearch(fridgeSel.join(" ") + " 레시피"); };
   loadTrending().then(items => {
     const tg = $("#trendGrid"); if (!tg) return;
     tg.innerHTML = "";
@@ -694,6 +709,7 @@ function renderHome() {
     items.slice(0, 6).forEach(v => { lastResults.set(v.id, v); tg.appendChild(card(v)); });
   });
 }
+
 function showHome() { $("#home").classList.remove("hidden"); renderHome(); }
 function hideHome() { const h = $("#home"); if (h) h.classList.add("hidden"); }
 function goHome() {

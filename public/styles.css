@@ -353,3 +353,10 @@ body {
 .rl-result { display: flex; gap: 8px; margin-top: 10px; }
 .rl-result button { flex: 1; padding: 11px; border-radius: 10px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .rl-open { background: color-mix(in srgb, var(--brand) 12%, transparent) !important; color: var(--brand) !important; border-color: transparent !important; }
+
+/* 냉장고 파먹기 직접입력 */
+.fridge-input { display: flex; gap: 8px; margin: 6px 0 10px; }
+.fridge-input input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font-size: 15px; }
+.fridge-input button { padding: 0 16px; border: 0; border-radius: 10px; font-weight: 700; color: #fff; background: var(--brand); cursor: pointer; }
+.fridge-sel { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.fridge-sel .chip { cursor: pointer; }
