@@ -30,6 +30,7 @@
     </div>
     <nav class="tabs" role="tablist">
       <button class="tab active" data-view="search"><span class="tab-i">🔍</span><span class="tab-t">검색</span></button>
+      <button class="tab" data-view="eat"><span class="tab-i">🍽</span><span class="tab-t">뭐먹지</span></button>
       <button class="tab" data-view="saved"><span class="tab-i">⭐</span><span class="tab-t">저장함</span><span class="badge" id="savedCount">0</span></button>
       <button class="tab" data-view="cart"><span class="tab-i">🛒</span><span class="tab-t">장보기</span><span class="badge" id="cartCount">0</span></button>
     </nav>
@@ -73,6 +74,8 @@
   </main>
 
   <!-- 저장함 뷰 -->
+  <main id="view-eat" class="view"></main>
+
   <main id="view-saved" class="view">
     <h1 class="view-title">⭐ 저장함</h1>
     <p class="muted" id="savedEmpty">아직 저장한 영상이 없어요. 검색 결과에서 별표(☆)를 눌러 저장해 보세요.</p>
@@ -115,7 +118,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <footer class="foot">유튜브 데이터 · 재료/조리법 요약은 참고용이에요. 정확한 계량은 원본 영상을 확인하세요. 쿠팡 링크는 파트너스 활동의 일환으로 수수료를 받을 수 있습니다. · <b>빌드 v28</b></footer>
+  <footer class="foot">유튜브 데이터 · 재료/조리법 요약은 참고용이에요. 정확한 계량은 원본 영상을 확인하세요. 쿠팡 링크는 파트너스 활동의 일환으로 수수료를 받을 수 있습니다. · <b>빌드 v32</b></footer>
 
   <script src="/config.js"></script>
   <script src="/app.js"></script>

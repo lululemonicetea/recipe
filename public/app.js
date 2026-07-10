@@ -53,6 +53,7 @@ function showView(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === name));
   if (name === "saved") renderSaved();
   if (name === "cart") renderCart();
+  if (name === "eat") renderEat();
   window.scrollTo(0, 0);
 }
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => showView(t.dataset.view));
@@ -604,9 +605,70 @@ async function loadTrending() {
   try {
     const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&order=views`);
     const data = await res.json();
-    if (res.ok && data.items) { const items = data.items.slice(0, 8); store.set("rt_trend", { day: today, items }); return items; }
+    if (res.ok && data.items && data.items.length) { const seed = +(today.replace(/-/g, "")); const items = seededShuffle(data.items.slice(0, 16), seed).slice(0, 8); store.set("rt_trend", { day: today, items }); return items; }
   } catch {}
   return (cache && cache.items) || [];
+}
+
+const FRIDGE_ITEMS = ["계란","두부","김치","대파","양파","감자","당근","돼지고기","닭고기","밥","참치","애호박","버섯","스팸","어묵","콩나물","시금치","고구마","베이컨","떡"];
+const CATEGORIES = [{ label: "국·찌개", q: "국 찌개 레시피" }, { label: "밑반찬", q: "밑반찬 레시피" }, { label: "면요리", q: "면 요리 레시피" }, { label: "볶음밥", q: "볶음밥 레시피" }, { label: "다이어트", q: "다이어트 요리 레시피" }, { label: "자취요리", q: "자취 요리 레시피" }, { label: "안주", q: "안주 레시피" }, { label: "디저트", q: "홈베이킹 디저트 레시피" }, { label: "에어프라이어", q: "에어프라이어 요리 레시피" }, { label: "도시락", q: "도시락 반찬 레시피" }, { label: "한그릇", q: "한그릇 요리 레시피" }, { label: "고기요리", q: "고기 요리 레시피" }];
+let fridgeSel = [];
+
+const EAT_GROUPS = [
+  { icon: "⏰", title: "시간대", items: [{ label: "아침", q: "아침 간단 요리 레시피" }, { label: "점심", q: "점심 메뉴 요리 레시피" }, { label: "저녁", q: "저녁 요리 레시피" }, { label: "야식", q: "야식 레시피" }] },
+  { icon: "🍽", title: "상황", items: [{ label: "혼밥", q: "혼밥 간단 요리 레시피" }, { label: "손님상", q: "손님 접대 요리 레시피" }, { label: "술안주", q: "간단 술안주 레시피" }, { label: "다이어트", q: "다이어트 요리 레시피" }, { label: "해장", q: "해장 요리 레시피" }, { label: "도시락", q: "도시락 반찬 레시피" }] },
+  { icon: "🌦", title: "날씨", items: [{ label: "비 오는 날", q: "부침개 전 요리 레시피" }, { label: "추운 날", q: "뜨끈한 국물 요리 레시피" }, { label: "더운 날", q: "시원한 여름 요리 레시피" }] },
+  { icon: "⚡", title: "빠르게", items: [{ label: "시간 없을 때", q: "10분 초간단 요리 레시피" }, { label: "든든하게", q: "든든한 한그릇 요리 레시피" }, { label: "가볍게", q: "가벼운 샐러드 요리 레시피" }] },
+];
+let roulettePool = [], rlSpinning = false, rlLast = null;
+function rouletteCardHtml(v) {
+  if (!v) return `<div class="rl-empty">🎲 돌려서 오늘 뭐 먹을지 정해요!</div>`;
+  return `<div class="rl-card" data-open="${v.id}"><div class="rl-thumb"><img loading="lazy" src="${esc(v.thumbnail)}" alt="">${v.durationText ? `<span class="dur">${esc(v.durationText)}</span>` : ""}</div><div class="rl-info"><div class="rl-title">${esc(v.title)}</div><div class="rl-ch">${esc(v.channel)}${v.viewCount ? " · " + fmtViews(v.viewCount) : ""}</div></div></div>`;
+}
+async function loadRoulettePool() {
+  const now = new Date();
+  const slot = now.toISOString().slice(0, 10) + (now.getHours() < 12 ? "-am" : "-pm");
+  const cache = store.get("rt_roulette", null);
+  if (cache && cache.slot === slot && cache.items && cache.items.length) { roulettePool = cache.items; return roulettePool; }
+  const queries = ["인기 요리 레시피", "백종원 요리", "간단 저녁 요리", "자취 요리 레시피", "집밥 레시피", "맛있는 요리 레시피"];
+  const idx = (now.getDate() * 2 + (now.getHours() < 12 ? 0 : 1)) % queries.length;
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(queries[idx])}&order=views`);
+    const data = await res.json();
+    if (res.ok && data.items && data.items.length) { roulettePool = data.items.slice(0, 20); store.set("rt_roulette", { slot, items: roulettePool }); return roulettePool; }
+  } catch {}
+  roulettePool = (cache && cache.items) || [];
+  return roulettePool;
+}
+async function spinRoulette() {
+  if (rlSpinning) return;
+  const pool = roulettePool.length ? roulettePool : await loadRoulettePool();
+  if (!pool.length) { toast("메뉴를 불러오지 못했어요. 잠시 후 다시 시도해요"); return; }
+  rlSpinning = true;
+  const disp = $("#rlDisplay"), btn = $("#rlSpin"), rec = $("#rlResult");
+  if (btn) btn.disabled = true; if (rec) rec.innerHTML = "";
+  let delay = 60;
+  const step = () => {
+    const v = pool[Math.floor(Math.random() * pool.length)];
+    if (disp) disp.innerHTML = rouletteCardHtml(v);
+    delay *= 1.14;
+    if (delay < 340) { setTimeout(step, delay); return; }
+    let pick; do { pick = pool[Math.floor(Math.random() * pool.length)]; } while (pool.length > 1 && pick === rlLast);
+    rlLast = pick; lastResults.set(pick.id, pick);
+    if (disp) { disp.innerHTML = rouletteCardHtml(pick); const card = disp.querySelector(".rl-card"); if (card) { card.classList.add("rl-win"); card.onclick = () => openRecipe(pick.id); } }
+    if (rec) { rec.innerHTML = `<button class="rl-open" id="rlOpen">🍳 이 레시피 보기</button><button class="rl-again" id="rlAgain">🎲 다시 돌리기</button>`; const o = $("#rlOpen"); if (o) o.onclick = () => openRecipe(pick.id); const ag = $("#rlAgain"); if (ag) ag.onclick = spinRoulette; }
+    rlSpinning = false; if (btn) btn.disabled = false;
+  };
+  step();
+}
+function renderEat() {
+  const v = $("#view-eat"); if (!v) return;
+  v.innerHTML = `<h1 class="view-title">🍽 오늘 뭐 먹지?</h1><p class="muted">상황을 고르면 딱 맞는 레시피를 찾아드려요.</p>`
+    + EAT_GROUPS.map(g => `<div class="eat-group"><div class="eat-glabel">${g.icon} ${g.title}</div><div class="history">${g.items.map(it => `<span class="chip" data-eat="${esc(it.q)}">${esc(it.label)}</span>`).join("")}</div></div>`).join("")
+    + `<div class="eat-group rl-sec"><div class="eat-glabel">🎲 오늘의 룰렛 <span style="color:var(--muted);font-weight:400">· 유튜브 인기 메뉴 (하루 2번 갱신)</span></div><div id="rlDisplay" class="rl-display">${rouletteCardHtml(null)}</div><button id="rlSpin" class="rl-spin">🎲 돌리기</button><div id="rlResult" class="rl-result"></div></div>`;
+  v.querySelectorAll("[data-eat]").forEach(c => c.onclick = () => { doSearch(c.dataset.eat); showView("search"); });
+  const sp = $("#rlSpin"); if (sp) sp.onclick = spinRoulette;
+  loadRoulettePool();
 }
 
 function renderHome() {
@@ -614,12 +676,17 @@ function renderHome() {
   const seed = +(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
   const sug = seededShuffle(SUGGEST, seed).slice(0, 10);
   let html = "";
+  html += `<div class="home-block"><h2>🧊 냉장고 파먹기</h2><div class="history fridge-chips">${FRIDGE_ITEMS.map(f => `<span class="chip ${fridgeSel.includes(f) ? "on" : ""}" data-fr="${esc(f)}">${esc(f)}</span>`).join("")}</div><button class="fridge-go" id="fridgeGo">🍳 이 재료로 레시피 찾기${fridgeSel.length ? ` (${fridgeSel.length})` : ""}</button></div>`;
+  html += `<div class="home-block"><h2>📂 카테고리</h2><div class="history">${CATEGORIES.map(c => `<span class="chip" data-cat="${esc(c.q)}">${esc(c.label)}</span>`).join("")}</div></div>`;
   html += `<div class="home-block"><h2>이런 건 어때요?</h2><div class="history suggest">${sug.map(s => `<span class="chip" data-sug="${esc(s)}">${esc(s)}</span>`).join("")}</div></div>`;
   if (recent.length) html += `<div class="home-block"><h2>🕘 최근 본 레시피</h2><div class="grid" id="recentGrid"></div></div>`;
   html += `<div class="home-block"><h2>🔥 요즘 인기</h2><div class="grid" id="trendGrid"><div class="status"><span class="spinner"></span></div></div></div>`;
   home.innerHTML = html;
   if (recent.length) { const rg = $("#recentGrid"); recent.slice(0, 3).forEach(v => { lastResults.set(v.id, v); rg.appendChild(card(v)); }); }
   home.querySelectorAll("[data-sug]").forEach(c => c.onclick = () => doSearch(c.dataset.sug));
+  home.querySelectorAll("[data-cat]").forEach(c => c.onclick = () => doSearch(c.dataset.cat));
+  home.querySelectorAll("[data-fr]").forEach(c => c.onclick = () => { const f = c.dataset.fr; if (fridgeSel.includes(f)) { fridgeSel = fridgeSel.filter(x => x !== f); c.classList.remove("on"); } else { fridgeSel.push(f); c.classList.add("on"); } const fg = $("#fridgeGo"); if (fg) fg.textContent = "🍳 이 재료로 레시피 찾기" + (fridgeSel.length ? ` (${fridgeSel.length})` : ""); });
+  const fgBtn = $("#fridgeGo"); if (fgBtn) fgBtn.onclick = () => { if (!fridgeSel.length) return toast("가진 재료를 하나 이상 선택하세요"); doSearch(fridgeSel.join(" ") + " 레시피"); };
   loadTrending().then(items => {
     const tg = $("#trendGrid"); if (!tg) return;
     tg.innerHTML = "";
