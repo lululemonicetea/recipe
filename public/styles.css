@@ -374,3 +374,12 @@ body {
 .hist-q { cursor: pointer; }
 .hist-x { color: var(--muted); cursor: pointer; font-size: 11px; }
 .hist-clear { color: var(--muted); cursor: pointer; }
+
+/* 우리집 공유 */
+.space-bar { display: flex; align-items: center; gap: 10px; margin: 2px 0 14px; flex-wrap: wrap; }
+.space-status { font-size: 12px; color: var(--brand); font-weight: 600; }
+.space-panel h2 { font-size: 19px; margin: 0 0 6px; }
+.space-code { font-size: 30px; font-weight: 800; letter-spacing: 5px; text-align: center; padding: 18px; margin: 14px 0; border: 2px dashed var(--brand); border-radius: 14px; color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+.space-row { display: flex; gap: 8px; align-items: center; }
+.space-row input { flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font-size: 16px; text-transform: uppercase; }
+.space-or { text-align: center; color: var(--muted); font-size: 13px; margin: 16px 0 8px; }

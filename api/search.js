@@ -1,5 +1,32 @@
-// /api/search — 유튜브 검색 프록시(성과순). 유튜브 링크/영상ID면 그 영상 하나 반환.
+// /api/search — 유튜브 검색 프록시. 유튜브 링크/영상ID면 그 영상 하나 반환.
+// 검색 결과 캐싱(메모리 + Upstash KV)으로 유튜브 API 호출/할당량을 크게 절약.
+// 할당량 초과 시에는 저장해둔 예전 결과(스테일)로 대체해 앱이 멈추지 않게 함.
 const YT = "https://www.googleapis.com/youtube/v3";
+
+const SEARCH_TTL_S = Number(process.env.SEARCH_CACHE_TTL || 21600); // 신선 캐시 6시간
+const STALE_TTL_S = 604800;                                        // 비상(스테일) 캐시 7일
+const SEARCH_TTL_MS = SEARCH_TTL_S * 1000;
+
+const mem = new Map();
+function memGet(k) { const e = mem.get(k); if (e && Date.now() - e.at < SEARCH_TTL_MS) return e.data; if (e) mem.delete(k); return null; }
+function memSet(k, d) { mem.set(k, { at: Date.now(), data: d }); if (mem.size > 300) mem.delete(mem.keys().next().value); }
+
+async function kvGet(key) {
+  const u = process.env.UPSTASH_REDIS_REST_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!u || !t) return null;
+  try {
+    const r = await fetch(u, { method: "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(["GET", key]) });
+    const j = await r.json();
+    return j && j.result ? JSON.parse(j.result) : null;
+  } catch { return null; }
+}
+async function kvSetEx(key, val, ttl) {
+  const u = process.env.UPSTASH_REDIS_REST_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!u || !t) return;
+  try {
+    await fetch(u, { method: "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(["SET", key, JSON.stringify(val), "EX", ttl]) });
+  } catch {}
+}
 
 function parseDuration(iso) {
   const m = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(iso || "");
@@ -36,6 +63,14 @@ function mapVideo(v) {
     url: `https://www.youtube.com/watch?v=${v.id}`,
   };
 }
+function sortByOrder(items, order) {
+  const arr = items.slice();
+  if (order === "latest") arr.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  else if (order === "views") arr.sort((a, b) => b.viewCount - a.viewCount);
+  else if (order === "relevance") { /* 유튜브 관련성 순서 유지 */ }
+  else arr.sort((a, b) => performanceScore(b) - performanceScore(a));
+  return arr;
+}
 
 export default async function handler(req, res) {
   const key = process.env.YOUTUBE_API_KEY;
@@ -49,7 +84,7 @@ export default async function handler(req, res) {
   const lang = process.env.RELEVANCE_LANGUAGE || "ko";
   if (!q) return res.status(400).json({ error: "검색어(q)가 필요합니다." });
 
-  // 유튜브 링크/영상ID → 해당 영상 하나
+  // 유튜브 링크/영상ID → 해당 영상 하나 (search.list 할당량 소모 없음)
   const vid = extractVideoId(q);
   if (vid) {
     try {
@@ -67,6 +102,16 @@ export default async function handler(req, res) {
   const searchQuery = /레시피|만들기|요리|recipe/i.test(q) ? q : `${q} 레시피 만들기`;
   const ytOrder = order === "latest" ? "date" : order === "relevance" ? "relevance" : "viewCount";
 
+  // 캐시 키: 유튜브 호출 시그니처(ytOrder) 기준 → 성과순/조회수순이 같은 캐시 공유
+  const ck = `yts:v1:${ytOrder}:${region}:${lang}:${pageToken || "0"}:${q.toLowerCase()}`;
+  const sk = "stale:" + ck;
+
+  // 1) 캐시 확인 (메모리 → KV)
+  let raw = memGet(ck);
+  if (!raw) { raw = await kvGet(ck); if (raw) memSet(ck, raw); }
+  if (raw) return res.status(200).json({ items: sortByOrder(raw.items, order), nextPageToken: raw.nextPageToken, cached: true });
+
+  // 2) 캐시 미스 → 유튜브 호출
   try {
     const sp = new URLSearchParams({
       key, part: "snippet", q: searchQuery, type: "video", maxResults: "25",
@@ -77,8 +122,13 @@ export default async function handler(req, res) {
     const sJson = await sRes.json();
     if (!sRes.ok) {
       const reason = sJson?.error?.errors?.[0]?.reason || "";
+      // 할당량/레이트 초과 → 저장해둔 예전 결과로 대체
+      if (reason === "quotaExceeded" || reason === "rateLimitExceeded") {
+        const stale = await kvGet(sk);
+        if (stale) return res.status(200).json({ items: sortByOrder(stale.items, order), nextPageToken: stale.nextPageToken, cached: true, stale: true });
+      }
       const msg = reason === "quotaExceeded"
-        ? "오늘의 유튜브 API 사용량(무료 10,000)을 초과했어요. 내일 다시 시도하거나 할당량을 늘려주세요."
+        ? "오늘의 유튜브 검색 사용량(하루 약 100회)을 초과했어요. 저장된 결과가 없는 검색은 잠시 후 다시 시도해 주세요."
         : (sJson?.error?.message || "유튜브 검색에 실패했습니다.");
       return res.status(sRes.status).json({ error: msg });
     }
@@ -90,15 +140,13 @@ export default async function handler(req, res) {
     const vJson = await vRes.json();
     if (!vRes.ok) return res.status(vRes.status).json({ error: vJson?.error?.message || "영상 정보 조회 실패" });
 
-    let items = (vJson.items || []).map(mapVideo);
-    items.forEach(v => { v._score = performanceScore(v); });
-    if (order === "latest") items.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-    else if (order === "views") items.sort((a, b) => b.viewCount - a.viewCount);
-    else if (order === "relevance") { /* keep */ }
-    else items.sort((a, b) => b._score - a._score);
-    items.forEach(v => delete v._score);
+    const items = (vJson.items || []).map(mapVideo); // 관련성(유튜브) 순서 유지
+    const payload = { items, nextPageToken: sJson.nextPageToken || null };
+    memSet(ck, payload);
+    await kvSetEx(ck, payload, SEARCH_TTL_S);
+    await kvSetEx(sk, payload, STALE_TTL_S);
 
-    return res.status(200).json({ items, nextPageToken: sJson.nextPageToken || null });
+    return res.status(200).json({ items: sortByOrder(items, order), nextPageToken: payload.nextPageToken });
   } catch (e) {
     return res.status(500).json({ error: "서버 오류: " + (e?.message || String(e)) });
   }

@@ -12,6 +12,7 @@ let cart    = store.get("rt_cart", []);
 let theme   = store.get("rt_theme", "light");
 let sumCache = store.get("rt_sum2", {});
 let collapsed = store.get("rt_collapsed", {});
+let currentView = "search";
 
 /* ---------- 유틸 ---------- */
 const $ = s => document.querySelector(s);
@@ -48,6 +49,7 @@ function toast(msg) {
 
 /* ---------- 뷰 전환 ---------- */
 function showView(name) {
+  currentView = name;
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   $("#view-" + name).classList.add("active");
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === name));
@@ -188,7 +190,7 @@ function toggleStar(id, btn) {
     toast("⭐ 저장했어요! 다음에 비슷한 메뉴를 검색하면 맨 위에 나와요");
     if (!getSum(id)) fetchSummary(id).catch(() => {});
   }
-  store.set("rt_saved", saved);
+  persistSaved();
   updateCounts();
   // 화면의 모든 동일 id 별 버튼 갱신
   document.querySelectorAll(`[data-star="${id}"]`).forEach(b => {
@@ -332,7 +334,7 @@ function addIngredientsToCart(ing, src, mult) {
     cart.push({ id: uid(), text, name: name || text, src: src || "", done: false });
     added++;
   });
-  store.set("rt_cart", cart); updateCounts();
+  persistCart(); updateCounts();
   toast(added ? `🛒 ${added}개 재료를 담았어요` : "이미 담겨 있어요");
 }
 
@@ -380,7 +382,7 @@ function renderCart() {
       items.forEach(item => {
         const li = el("li", item.done ? "done" : "");
         li.innerHTML = `<span class="ck">${item.done ? "✓" : ""}</span><label>${esc(item.text)}</label>${item.done ? '<span class="have">있음</span>' : `<button class="cp-btn" data-cp="${item.id}" aria-label="쿠팡에서 구매">🛒</button>`}<button class="del" data-del="${item.id}" aria-label="삭제">🗑</button>`;
-        li.onclick = e => { if (e.target.closest("[data-del]") || e.target.closest("[data-cp]")) return; item.done = !item.done; store.set("rt_cart", cart); updateCounts(); renderCart(); };
+        li.onclick = e => { if (e.target.closest("[data-del]") || e.target.closest("[data-cp]")) return; item.done = !item.done; persistCart(); updateCounts(); renderCart(); };
         ul.appendChild(li);
       });
       g.appendChild(ul);
@@ -388,7 +390,7 @@ function renderCart() {
     list.appendChild(g);
   });
   list.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
-    cart = cart.filter(c => c.id !== b.dataset.del); store.set("rt_cart", cart); updateCounts(); renderCart();
+    cart = cart.filter(c => c.id !== b.dataset.del); persistCart(); updateCounts(); renderCart();
   });
   list.querySelectorAll("[data-cp]").forEach(b => b.onclick = e => { e.stopPropagation(); const it = cart.find(c => c.id === b.dataset.cp); if (it) goCoupang([it.name || it.text]); });
 }
@@ -396,7 +398,7 @@ function renderCart() {
 $("#cartSelectAll").onclick = () => {
   const anyOff = cart.some(c => !c.done);
   cart.forEach(c => c.done = anyOff);
-  store.set("rt_cart", cart); renderCart();
+  persistCart(); renderCart();
 };
 $("#cartCollapseAll").onclick = () => {
   const gs = [...new Set(cart.map(c => c.src || "직접추가"))];
@@ -458,7 +460,7 @@ $("#cartFab").onclick = openCoupang;
 $("#cartAddBtn").onclick = () => {
   const v = $("#cartInput").value.trim(); if (!v) return;
   cart.push({ id: uid(), text: v, name: v, src: "직접추가", done: false });
-  $("#cartInput").value = ""; store.set("rt_cart", cart); updateCounts(); renderCart();
+  $("#cartInput").value = ""; persistCart(); updateCounts(); renderCart();
 };
 $("#cartInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#cartAddBtn").click(); });
 $("#cartShare").onclick = shareCartList;
@@ -468,8 +470,8 @@ $("#cartCopy").onclick = async () => {
   try { await navigator.clipboard.writeText(text); toast("목록을 복사했어요"); }
   catch { toast("복사 실패 — 길게 눌러 복사해 주세요"); }
 };
-$("#cartClearChecked").onclick = () => { cart = cart.filter(c => !c.done); store.set("rt_cart", cart); updateCounts(); renderCart(); };
-$("#cartClearAll").onclick = () => { if (confirm("장보기 목록을 모두 비울까요?")) { cart = []; store.set("rt_cart", cart); updateCounts(); renderCart(); } };
+$("#cartClearChecked").onclick = () => { cart = cart.filter(c => !c.done); persistCart(); updateCounts(); renderCart(); };
+$("#cartClearAll").onclick = () => { if (confirm("장보기 목록을 모두 비울까요?")) { cart = []; persistCart(); updateCounts(); renderCart(); } };
 
 /* ---------- 저장함 ---------- */
 function renderSaved() {
@@ -500,6 +502,7 @@ function renderHistory() {
 function updateCounts() {
   $("#savedCount").textContent = saved.length;
   $("#cartCount").textContent = cart.filter(c => !c.done).length;
+  updateSpaceStatus();
 }
 function applyTheme() {
   document.documentElement.setAttribute("data-theme", theme);
@@ -802,8 +805,117 @@ window.addEventListener("popstate", () => {
   const ob = document.querySelector(".onboard"); if (ob) ob.remove();
 });
 
+/* ---------- 우리집 공유(로그인 없는 코드 동기화) ---------- */
+let spaceCode = store.get("rt_space", null);
+let spaceRev = store.get("rt_space_rev", 0);
+let spacePushTimer = null, spaceDirtyCart = false, spacePolling = null, spaceBusy = false;
+
+function persistSaved() { store.set("rt_saved", saved); spaceQueuePush(); }
+function persistCart() { store.set("rt_cart", cart); spaceDirtyCart = true; spaceQueuePush(); }
+
+function unionSaved(a, b) {
+  const seen = new Set(), out = [];
+  for (const v of [...(a || []), ...(b || [])]) { if (v && v.id && !seen.has(v.id)) { seen.add(v.id); out.push(v); } }
+  return out;
+}
+function mergeCart(a, b) {
+  const seen = new Set(), out = [];
+  for (const c of [...(a || []), ...(b || [])]) { if (!c) continue; const k = (c.recipe || "") + "|" + (c.text || c.name || ""); if (!seen.has(k)) { seen.add(k); out.push(c); } }
+  return out;
+}
+async function spaceApi(method, path, body) {
+  const opt = { method };
+  if (body) { opt.headers = { "Content-Type": "application/json" }; opt.body = JSON.stringify(body); }
+  const r = await fetch("/api/space" + (path || ""), opt);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "공유 서버 오류");
+  return j;
+}
+function spaceQueuePush() { if (!spaceCode) return; clearTimeout(spacePushTimer); spacePushTimer = setTimeout(spacePush, 1200); }
+async function spacePush() {
+  if (!spaceCode || spaceBusy) return;
+  spaceBusy = true;
+  try {
+    let cur = null; try { cur = await spaceApi("GET", "?code=" + spaceCode); } catch {}
+    const mergedSaved = unionSaved(saved, cur ? cur.saved : []);
+    const res = await spaceApi("POST", "", { action: "push", code: spaceCode, saved: mergedSaved, cart });
+    saved = mergedSaved; store.set("rt_saved", saved);
+    spaceRev = res.rev; store.set("rt_space_rev", spaceRev);
+    spaceDirtyCart = false;
+    updateCounts();
+  } catch (e) { /* 다음 주기에 재시도 */ }
+  spaceBusy = false;
+}
+async function spacePull() {
+  if (!spaceCode || spaceBusy) return;
+  try {
+    const cur = await spaceApi("GET", "?code=" + spaceCode);
+    if (!cur || (cur.rev || 0) <= spaceRev) return;
+    const mergedSaved = unionSaved(saved, cur.saved);
+    let changed = mergedSaved.length !== saved.length;
+    saved = mergedSaved; store.set("rt_saved", saved);
+    if (!spaceDirtyCart) { cart = Array.isArray(cur.cart) ? cur.cart : cart; store.set("rt_cart", cart); changed = true; }
+    spaceRev = cur.rev; store.set("rt_space_rev", spaceRev);
+    updateCounts();
+    if (changed) { if (currentView === "saved") renderSaved(); if (currentView === "cart") renderCart(); }
+  } catch (e) {}
+}
+function spaceStartPolling() { clearInterval(spacePolling); if (spaceCode) spacePolling = setInterval(spacePull, 15000); }
+async function spaceCreate() {
+  const j = await spaceApi("POST", "", { action: "create" });
+  spaceCode = j.code; store.set("rt_space", spaceCode);
+  spaceRev = 0; store.set("rt_space_rev", 0);
+  await spacePush();
+  spaceStartPolling();
+}
+async function spaceJoin(code) {
+  code = (code || "").toUpperCase().trim();
+  if (!code) { toast("코드를 입력하세요"); return false; }
+  let cur;
+  try { cur = await spaceApi("GET", "?code=" + code); } catch { toast("코드를 찾을 수 없어요. 다시 확인해 주세요"); return false; }
+  spaceCode = code; store.set("rt_space", spaceCode);
+  saved = unionSaved(saved, cur.saved); store.set("rt_saved", saved);
+  cart = mergeCart(cart, cur.cart); store.set("rt_cart", cart);
+  spaceRev = cur.rev || 0; store.set("rt_space_rev", spaceRev);
+  await spacePush();
+  spaceStartPolling();
+  updateCounts();
+  toast("우리집에 연결됐어요 ✓");
+  return true;
+}
+function spaceLeave() {
+  spaceCode = null; store.set("rt_space", null);
+  spaceRev = 0; store.set("rt_space_rev", 0);
+  clearInterval(spacePolling);
+  toast("우리집 연결을 끊었어요");
+}
+function updateSpaceStatus() {
+  document.querySelectorAll(".space-status").forEach(e => e.textContent = spaceCode ? `우리집 ${spaceCode} · 연결됨` : "");
+  document.querySelectorAll(".space-btn").forEach(b => b.textContent = spaceCode ? "👪 우리집 " + spaceCode : "👪 우리집 공유");
+}
+function renderSpacePanel() {
+  const connected = !!spaceCode;
+  const body = connected
+    ? `<h2>👪 우리집 공유</h2><p class="muted">이 코드를 가족에게 알려주고 다른 기기에서 '참여하기'에 입력하면, 저장함과 장보기를 함께 보게 돼요.</p><div class="space-code">${esc(spaceCode)}</div><div class="space-row"><button class="primary-btn" id="spCopy">코드 복사</button><button class="ghost" id="spSync">지금 동기화</button></div><button class="ghost danger" id="spLeave" style="margin-top:12px;width:100%">이 기기 연결 끊기</button><p class="muted" style="font-size:12px;margin-top:10px">※ 저장한 레시피는 서로 합쳐지고, 장보기는 마지막에 바꾼 내용이 반영돼요.</p>`
+    : `<h2>👪 우리집 공유</h2><p class="muted">부부·가족이 저장한 레시피와 장보기 목록을 함께 봐요. 로그인 없이 코드로 연결돼요.</p><button class="primary-btn" id="spCreate" style="width:100%">새 우리집 만들기</button><div class="space-or">또는 받은 코드로</div><div class="space-row"><input id="spInput" placeholder="예: ABC123" maxlength="8" autocomplete="off"><button class="primary-btn" id="spJoin">참여하기</button></div>`;
+  $("#modalBody").innerHTML = `<div class="space-panel">${body}</div>`;
+  if (connected) {
+    $("#spCopy").onclick = async () => { try { await navigator.clipboard.writeText(spaceCode); toast("코드를 복사했어요"); } catch { toast("복사 실패 — 코드를 길게 눌러 복사하세요"); } };
+    $("#spSync").onclick = async () => { await spacePush(); await spacePull(); toast("동기화했어요 ✓"); };
+    $("#spLeave").onclick = () => { spaceLeave(); renderSpacePanel(); updateSpaceStatus(); };
+  } else {
+    $("#spCreate").onclick = async () => { try { await spaceCreate(); renderSpacePanel(); updateSpaceStatus(); } catch (e) { toast(e.message || "만들기 실패"); } };
+    $("#spJoin").onclick = async () => { const ok = await spaceJoin($("#spInput").value); if (ok) { renderSpacePanel(); updateSpaceStatus(); if (currentView === "saved") renderSaved(); if (currentView === "cart") renderCart(); } };
+  }
+}
+function openSpacePanel() { renderSpacePanel(); $("#modal").classList.remove("hidden"); document.body.style.overflow = "hidden"; pushOverlay(); }
+
 /* ---------- 초기화 ---------- */
 applyTheme(); updateCounts(); renderHistory(); showHome();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 showOnboarding();
 { const p = new URLSearchParams(location.search); if (p.get("recipe")) openRecipe(p.get("recipe")); else if (p.get("q")) doSearch(p.get("q")); }
+document.querySelectorAll(".space-btn").forEach(b => b.onclick = openSpacePanel);
+updateSpaceStatus();
+if (spaceCode) { spaceStartPolling(); spacePull(); }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) spacePull(); });
