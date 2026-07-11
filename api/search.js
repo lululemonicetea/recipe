@@ -12,7 +12,7 @@ function memGet(k) { const e = mem.get(k); if (e && Date.now() - e.at < SEARCH_T
 function memSet(k, d) { mem.set(k, { at: Date.now(), data: d }); if (mem.size > 300) mem.delete(mem.keys().next().value); }
 
 async function kvGet(key) {
-  const u = process.env.UPSTASH_REDIS_REST_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const u = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
   if (!u || !t) return null;
   try {
     const r = await fetch(u, { method: "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(["GET", key]) });
@@ -21,7 +21,7 @@ async function kvGet(key) {
   } catch { return null; }
 }
 async function kvSetEx(key, val, ttl) {
-  const u = process.env.UPSTASH_REDIS_REST_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const u = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
   if (!u || !t) return;
   try {
     await fetch(u, { method: "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(["SET", key, JSON.stringify(val), "EX", ttl]) });

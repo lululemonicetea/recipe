@@ -4,7 +4,7 @@ const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 헷갈리는 글자(O,0
 const SPACE_TTL_S = 7776000; // 90일(활동 시 push마다 갱신)
 
 async function kvGet(key) {
-  const u = process.env.UPSTASH_REDIS_REST_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const u = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
   if (!u || !t) return null;
   try {
     const r = await fetch(u, { method: "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(["GET", key]) });
@@ -13,7 +13,7 @@ async function kvGet(key) {
   } catch { return null; }
 }
 async function kvSet(key, val) {
-  const u = process.env.UPSTASH_REDIS_REST_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const u = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL, t = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
   if (!u || !t) return;
   try {
     await fetch(u, { method: "POST", headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(["SET", key, JSON.stringify(val), "EX", SPACE_TTL_S]) });
@@ -28,7 +28,7 @@ async function readBody(req) {
 function trim(arr, n) { return Array.isArray(arr) ? arr.slice(0, n) : []; }
 
 export default async function handler(req, res) {
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+  if (!(process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL) || !(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN)) {
     return res.status(500).json({ error: "공유 기능은 서버 저장소(Upstash)가 필요해요. Vercel 환경변수(UPSTASH_REDIS_REST_URL/TOKEN)를 설정하세요." });
   }
   try {
