@@ -196,6 +196,15 @@ async function smartSummarize(videoId, title, description, tags, durSec) {
   return data;
 }
 
+function withBudget(promise, ms, fallbackFn) {
+  return new Promise(resolve => {
+    let done = false;
+    const timer = setTimeout(() => { if (!done) { done = true; resolve(fallbackFn()); } }, ms);
+    Promise.resolve(promise).then(v => { if (!done) { done = true; clearTimeout(timer); resolve(v); } })
+      .catch(() => { if (!done) { done = true; clearTimeout(timer); resolve(fallbackFn()); } });
+  });
+}
+
 export default async function handler(req, res) {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) return res.status(500).json({ error: "YOUTUBE_API_KEY가 설정되지 않았습니다." });
@@ -215,7 +224,12 @@ export default async function handler(req, res) {
     const title = sn.title || "", description = sn.description || "", tags = (sn.tags || []).join(", ");
     let data;
     if (process.env.GEMINI_API_KEY) {
-      data = await smartSummarize(videoId, title, description, tags, durSec);
+      data = await withBudget(smartSummarize(videoId, title, description, tags, durSec), 50000, () => {
+        const t = summarizeFromText(title, description);
+        t.note = "영상 분석이 오래 걸려 설명 기반 간단 요약만 제공했어요. 정확한 계량·시간은 ‘영상에서 보기’로 확인해 주세요.";
+        t._partial = true;
+        return t;
+      });
     } else {
       data = summarizeFromText(title, description);
     }
@@ -226,7 +240,8 @@ export default async function handler(req, res) {
     if (noIng && noStep && !data.note) {
       data.note = "이 영상은 자막·설명이 부족해 자동으로 정리할 재료·순서를 찾지 못했어요. ‘영상에서 보기’로 확인해 주세요.";
     }
-    if (hasContent(data)) { cache.set(videoId, { at: Date.now(), data }); await kvSet("sum:" + videoId, data); }
+    if (hasContent(data) && !data._partial) { cache.set(videoId, { at: Date.now(), data }); await kvSet("sum:" + videoId, data); }
+    if (data._partial) res.setHeader("Cache-Control", "no-store");
     return res.status(200).json(data);
   } catch (e) {
     return res.status(500).json({ error: "요약 중 오류: " + (e?.message || String(e)) });

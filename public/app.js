@@ -223,9 +223,12 @@ function putSum(id, data) {
 async function fetchSummary(id) {
   const c = getSum(id); if (c) return c;
   const res = await fetch(`/api/summarize?videoId=${id}`);
-  const d = await res.json();
+  const text = await res.text();
+  let d;
+  try { d = JSON.parse(text); }
+  catch { throw new Error("영상이 길어 요약이 오래 걸려요. 잠시 후 다시 시도하거나 ‘영상에서 보기’로 확인해 주세요."); }
   if (!res.ok) throw new Error(d.error || "요약 실패");
-  putSum(id, d);
+  if (!d._partial) putSum(id, d);
   return d;
 }
 
