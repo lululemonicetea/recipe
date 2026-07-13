@@ -104,6 +104,7 @@ async function doSearch(query, append = false) {
     const frag = document.createDocumentFragment();
     items.forEach(v => frag.appendChild(card(v)));
     $("#results").appendChild(frag);
+    loadCommentSignals(items.slice(0, 12).map(v => v.id));
     status.textContent = "";
     $("#resultMeta").textContent = `“${q}” 성과 좋은 순 상위 영상`;
     if (nextPageToken) $("#moreBtn").classList.remove("hidden");
@@ -145,6 +146,7 @@ function card(v, isTop = false) {
   c.innerHTML = `
     <div class="thumb" data-open="${v.id}">
       ${isTop ? '<span class="ribbon">⭐ 저장함</span>' : ""}
+      <span class="taste-badge" data-taste="${v.id}"></span>
       <img loading="lazy" src="${esc(v.thumbnail)}" alt="">
       ${v.durationText ? `<span class="dur">${esc(v.durationText)}</span>` : ""}
       <span class="play">▶</span>
@@ -255,6 +257,19 @@ function recipeBodyHTML(d, m, opts = {}) {
   const empty = !ing.length && !steps.length;
   const serv = opts.stepper && ing.length
     ? `<div class="serv">분량 <button data-mult="-1">－</button> <b>×${m}</b> <button data-mult="1">＋</button></div>` : "";
+  let completeHtml = "";
+  if (ing.length || steps.length) {
+    const amtN = ing.filter(i => (i.amount || "").toString().trim()).length;
+    const amtT = ing.length;
+    const hasTime = steps.some(s => /\d+\s*(분|초|시간|min)/.test(s)) || (d.totalTime && /\d/.test(String(d.totalTime)));
+    const cov = amtT ? amtN / amtT : 0;
+    let cls, label;
+    if (amtT && cov >= 0.6 && hasTime) { cls = "cp-good"; label = "정보 충실"; }
+    else if (cov >= 0.3 || hasTime) { cls = "cp-mid"; label = "정보 일부"; }
+    else { cls = "cp-low"; label = "계량 정보 부족 · 영상 확인 권장"; }
+    const amtTxt = amtT ? `📏 계량 ${amtN}/${amtT}` : "📏 계량 정보 없음";
+    completeHtml = `<div class="complete ${cls}"><b>${esc(label)}</b><span>${amtTxt} · ${hasTime ? "⏱ 시간 정보 있음" : "⏱ 시간 불명"}</span></div>`;
+  }
   return `
     <h2>${esc(d.dish || "레시피")}</h2>
     <div class="sub">
@@ -263,6 +278,7 @@ function recipeBodyHTML(d, m, opts = {}) {
       ${d.totalTime ? `<span>⏱ <b>${esc(d.totalTime)}</b></span>` : ""}
       ${d.difficulty ? `<span>🔥 <b>${esc(d.difficulty)}</b></span>` : ""}
     </div>
+    ${completeHtml}
     ${d.aiError ? `<div class="note">${esc(d.aiError)}</div>` : ""}
     ${d.debug ? `<div class="note" style="font-size:11px;opacity:.6">${esc(d.debug)}</div>` : ""}
     ${d.note ? `<div class="note">${esc(d.note)}</div>` : ""}
@@ -804,6 +820,30 @@ window.addEventListener("popstate", () => {
   if (md && !md.classList.contains("hidden")) { closeModal(true); return; }
   const ob = document.querySelector(".onboard"); if (ob) ob.remove();
 });
+
+/* ---------- 댓글 기반 맛보장 배지 ---------- */
+const tasteCache = new Map();
+function applyTasteBadge(id, sig) {
+  if (!sig || !sig.badge) return;
+  document.querySelectorAll(`[data-taste="${id}"]`).forEach(elm => {
+    elm.className = "taste-badge " + (sig.badge === "hit" ? "tb-hit" : "tb-good");
+    elm.textContent = sig.badge === "hit" ? "🔥 맛보장" : "👍 평 좋음";
+    if (sig.sample) elm.title = "댓글: " + sig.sample;
+  });
+}
+async function loadCommentSignals(ids) {
+  ids = (ids || []).filter(Boolean);
+  ids.forEach(id => { if (tasteCache.has(id)) applyTasteBadge(id, tasteCache.get(id)); });
+  const need = ids.filter(id => !tasteCache.has(id));
+  if (!need.length) return;
+  try {
+    const r = await fetch("/api/comments?ids=" + encodeURIComponent(need.join(",")));
+    if (!r.ok) return;
+    const d = await r.json();
+    const sig = d.signals || {};
+    for (const id of need) { const s = sig[id] || { badge: null }; tasteCache.set(id, s); applyTasteBadge(id, s); }
+  } catch (e) {}
+}
 
 /* ---------- 우리집 공유(로그인 없는 코드 동기화) ---------- */
 let spaceCode = store.get("rt_space", null);

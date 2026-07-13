@@ -383,3 +383,17 @@ body {
 .space-row { display: flex; gap: 8px; align-items: center; }
 .space-row input { flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font-size: 16px; text-transform: uppercase; }
 .space-or { text-align: center; color: var(--muted); font-size: 13px; margin: 16px 0 8px; }
+
+/* 맛보장 배지(댓글 기반) */
+.thumb { position: relative; }
+.taste-badge { position: absolute; top: 6px; left: 6px; z-index: 2; font-size: 11px; font-weight: 800; padding: 3px 7px; border-radius: 8px; color: #fff; letter-spacing: -.2px; }
+.taste-badge:empty { display: none; }
+.tb-hit { background: linear-gradient(135deg, #ff3d00, #ff7a00); box-shadow: 0 2px 6px rgba(255,61,0,.45); }
+.tb-good { background: rgba(0,0,0,.72); }
+/* 계량·시간 충실도 */
+.complete { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 6px; padding: 8px 11px; border-radius: 10px; }
+.complete b { font-size: 13px; }
+.complete span { font-size: 12px; opacity: .85; }
+.complete.cp-good { background: color-mix(in srgb, #16a34a 13%, transparent); color: #15803d; }
+.complete.cp-mid { background: color-mix(in srgb, #d97706 14%, transparent); color: #b45309; }
+.complete.cp-low { background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; }
