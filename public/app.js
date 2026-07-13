@@ -300,6 +300,7 @@ function recipeBodyHTML(d, m, opts = {}) {
       ${steps.length ? `<button class="cta-cook">🍳 조리 시작</button>` : ""}
       ${ing.length ? `<button class="cta-cart">🛒 장보기 담기</button>` : ""}
       <button class="cta-share">↗ 공유</button>
+      <button class="cta-img">🖼 이미지</button>
     </div>`;
 }
 
@@ -316,7 +317,9 @@ function wireRecipe(scope, d, m, isModal) {
   const ck = scope.querySelector(".cta-cook");
   if (ck) ck.onclick = () => startCook(d);
   const sh = scope.querySelector(".cta-share");
-  if (sh) sh.onclick = () => shareRecipeCard(d);
+  if (sh) sh.onclick = () => shareRecipe(d);
+  const si = scope.querySelector(".cta-img");
+  if (si) si.onclick = () => shareRecipeCard(d);
 }
 
 // 저장한 영상: 오른쪽에 레시피 자동 표시
@@ -610,9 +613,11 @@ async function shareText(title, text, url) {
   catch { toast("이 환경에선 공유가 어려워요"); }
 }
 function shareRecipe(d) {
-  const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount)).map(i => `- ${(i.item || "")} ${(i.amount || "")}`.trim()).join("\n");
-  const text = `🍳 ${d.dish || "레시피"}\n\n[재료]\n${ing || "(영상 참고)"}\n\n레시피튜브`;
-  shareText(d.dish || "레시피", text, d._url || location.origin);
+  const id = d.videoId || d._id || "";
+  const url = id ? `${location.origin}/r/${id}` : (d._url || location.origin);
+  const info = []; if (d.servings) info.push("👥 " + d.servings); if (d.totalTime) info.push("⏱ " + d.totalTime);
+  const text = `🍳 ${d.dish || "레시피"}${info.length ? " · " + info.join(" · ") : ""}\n레시피튜브에서 재료·조리법을 확인하세요`;
+  shareText(d.dish || "레시피튜브", text, url);
 }
 function shareCartList() {
   if (!cart.length) return toast("목록이 비어 있어요");
@@ -764,30 +769,53 @@ function wrapText(c, text, x, y, maxW, lh) {
   if (line) { c.fillText(line, x, y); y += lh; }
   return y;
 }
+function loadImgCors(src) { return new Promise((res, rej) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+function trunc(c, t, maxW) { t = String(t || ""); if (c.measureText(t).width <= maxW) return t; while (t.length && c.measureText(t + "…").width > maxW) t = t.slice(0, -1); return t + "…"; }
 async function shareRecipeCard(d) {
   try {
+    const id = d.videoId || d._id || "";
     const W = 1080, H = 1350, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-    const c = cv.getContext("2d");
-    const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#ff8a65"); g.addColorStop(1, "#ff5722");
-    c.fillStyle = g; c.fillRect(0, 0, W, H);
-    const m = 56; c.fillStyle = "#fff"; roundRect(c, m, m, W - 2 * m, H - 2 * m, 40); c.fill();
-    c.textBaseline = "top";
-    try { const lg = await loadImg("/icon-192.png"); c.drawImage(lg, m + 40, m + 44, 104, 104); } catch {}
-    c.fillStyle = "#ff5722"; c.font = "700 40px sans-serif"; c.fillText("레시피튜브", m + 164, m + 76);
-    c.fillStyle = "#1c1c1e"; c.font = "800 62px sans-serif";
-    let y = wrapText(c, d.dish || "레시피", m + 50, m + 210, W - 2 * m - 100, 74);
-    y += 24; c.fillStyle = "#ff5722"; c.font = "700 36px sans-serif"; c.fillText("🧺 재료", m + 50, y); y += 66;
-    c.fillStyle = "#333"; c.font = "400 34px sans-serif";
-    const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount)).slice(0, 8);
-    if (ing.length) ing.forEach(i => { c.fillText("·  " + (i.item || "") + "   " + (i.amount || ""), m + 50, y); y += 52; });
-    else c.fillText("영상에서 전체 레시피를 확인하세요", m + 50, y);
-    c.fillStyle = "#888"; c.font = "400 28px sans-serif"; c.fillText("레시피튜브 앱에서 영상·전체 레시피 보기", m + 50, H - m - 96);
-    c.fillStyle = "#ff5722"; c.font = "600 30px sans-serif"; c.fillText("recipe-blush-ten.vercel.app", m + 50, H - m - 56);
+    const c = cv.getContext("2d"); c.textBaseline = "top";
+    c.fillStyle = "#fff"; c.fillRect(0, 0, W, H);
+    const coverH = 610; let covered = false;
+    if (id) {
+      try {
+        const img = await loadImgCors(`https://i.ytimg.com/vi/${id}/hqdefault.jpg`);
+        const ar = img.width / img.height, tr = W / coverH; let sw, sh, sx, sy;
+        if (ar > tr) { sh = img.height; sw = sh * tr; sx = (img.width - sw) / 2; sy = 0; }
+        else { sw = img.width; sh = sw / tr; sx = 0; sy = (img.height - sh) / 2; }
+        c.drawImage(img, sx, sy, sw, sh, 0, 0, W, coverH); covered = true;
+      } catch (e) {}
+    }
+    if (!covered) { const g = c.createLinearGradient(0, 0, W, coverH); g.addColorStop(0, "#ff8a65"); g.addColorStop(1, "#ff5722"); c.fillStyle = g; c.fillRect(0, 0, W, coverH); }
+    const og = c.createLinearGradient(0, coverH - 170, 0, coverH); og.addColorStop(0, "rgba(0,0,0,0)"); og.addColorStop(1, "rgba(0,0,0,.5)"); c.fillStyle = og; c.fillRect(0, coverH - 170, W, 170);
+    c.fillStyle = "#fff"; c.font = "800 34px sans-serif"; c.fillText("🍳 레시피튜브", 44, 40);
+    let y = coverH + 40;
+    c.fillStyle = "#1c1c1e"; c.font = "800 58px sans-serif";
+    y = wrapText(c, d.dish || "레시피", 48, y, W - 96, 68);
+    const info = []; if (d.servings) info.push("👥 " + d.servings); if (d.totalTime) info.push("⏱ " + d.totalTime); if (d.difficulty) info.push("🔥 " + d.difficulty);
+    if (info.length) { y += 12; c.fillStyle = "#ff5722"; c.font = "600 32px sans-serif"; c.fillText(info.join("    "), 48, y); y += 52; }
+    y += 14;
+    const ing = (d.ingredients || []).filter(i => i && (i.item || i.amount)).slice(0, 6);
+    if (ing.length) {
+      c.fillStyle = "#ff5722"; c.font = "700 33px sans-serif"; c.fillText("🧺 재료", 48, y); y += 52;
+      c.fillStyle = "#333"; c.font = "400 31px sans-serif";
+      ing.forEach(i => { c.fillText(trunc(c, "·  " + (i.item || "") + "  " + (i.amount || ""), W - 96), 48, y); y += 46; });
+      y += 12;
+    }
+    const steps = (d.steps || []).filter(Boolean).slice(0, 3);
+    if (steps.length && y < H - 210) {
+      c.fillStyle = "#ff5722"; c.font = "700 33px sans-serif"; c.fillText("👩‍🍳 조리 순서", 48, y); y += 52;
+      c.fillStyle = "#333"; c.font = "400 29px sans-serif";
+      steps.forEach((s, i) => { if (y > H - 150) return; c.fillText(trunc(c, (i + 1) + ". " + s, W - 96), 48, y); y += 44; });
+    }
+    c.fillStyle = "#999"; c.font = "400 27px sans-serif"; c.fillText("레시피튜브 앱에서 영상·전체 레시피 보기", 48, H - 88);
+    c.fillStyle = "#ff5722"; c.font = "600 29px sans-serif"; c.fillText(location.host, 48, H - 50);
     const blob = await new Promise(r => cv.toBlob(r, "image/png"));
-    const url = location.origin + "/?recipe=" + (d.videoId || d._id || "");
+    const link = id ? `${location.origin}/r/${id}` : location.origin;
     const file = new File([blob], "recipe.png", { type: "image/png" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: d.dish || "레시피튜브", text: (d.dish || "레시피") + " — 레시피튜브\n" + url });
+      await navigator.share({ files: [file], title: d.dish || "레시피튜브", text: (d.dish || "레시피") + " — 레시피튜브\n" + link });
     } else {
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = (d.dish || "recipe") + ".png"; a.click();
       toast("이미지를 저장했어요 — 공유해보세요");

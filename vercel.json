@@ -1,16 +1,28 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/*.js": { "maxDuration": 60 }
+    "api/*.js": {
+      "maxDuration": 60
+    }
   },
   "rewrites": [
-    { "source": "/.well-known/assetlinks.json", "destination": "/api/assetlinks" }
+    {
+      "source": "/.well-known/assetlinks.json",
+      "destination": "/api/assetlinks"
+    },
+    {
+      "source": "/r/:v",
+      "destination": "/api/share?v=:v"
+    }
   ],
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "s-maxage=3600, stale-while-revalidate=86400" }
+        {
+          "key": "Cache-Control",
+          "value": "s-maxage=3600, stale-while-revalidate=86400"
+        }
       ]
     }
   ]
