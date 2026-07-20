@@ -237,9 +237,11 @@ export default async function handler(req, res) {
   const videoId = url.searchParams.get("videoId");
   if (!videoId) return res.status(400).json({ error: "videoId가 필요합니다." });
   const lang = (url.searchParams.get("lang") || "ko"); curLang = lang; const ck = lang + ":" + videoId;
-  const hit = cache.get(ck);
+  const refresh = url.searchParams.get("refresh") === "1";
+  if (refresh) res.setHeader("Cache-Control", "no-store");
+  const hit = refresh ? null : cache.get(ck);
   if (hit && Date.now() - hit.at < TTL) return res.status(200).json(hit.data);
-  const kv = await kvGet("sum:" + ck);
+  const kv = refresh ? null : await kvGet("sum:" + ck);
   if (kv) { cache.set(ck, { at: Date.now(), data: kv }); return res.status(200).json(kv); }
   try {
     const vp = new URLSearchParams({ key, part: "snippet,contentDetails", id: videoId });

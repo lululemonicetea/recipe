@@ -69,6 +69,9 @@ const I18N = {
   "🍳 조리 시작": ["🍳 Start cooking", "🍳 Empezar"],
   "🛒 장보기 담기": ["🛒 Add to list", "🛒 Añadir a lista"],
   "🖼 이미지": ["🖼 Image", "🖼 Imagen"],
+  "🔄 레시피 다시 정리": ["🔄 Re-analyze recipe", "🔄 Rehacer receta"],
+  "영상을 다시 보고 레시피를 정리하고 있어요…": ["Re-analyzing the video…", "Analizando el vídeo de nuevo…"],
+  "새로 정리했어요 ✓": ["Updated ✓", "Actualizado ✓"],
   "AI 영상 분석": ["AI video analysis", "Análisis de vídeo IA"],
   "AI 요약": ["AI summary", "Resumen IA"],
   "설명 기반": ["From description", "De la descripción"],
@@ -360,9 +363,9 @@ function putSum(id, data) {
   if (ks.length > 120) { ks.sort((a, b) => sumCache[a].at - sumCache[b].at); delete sumCache[ks[0]]; }
   store.set("rt_sum2", sumCache);
 }
-async function fetchSummary(id) {
-  const c = getSum(id); if (c) return c;
-  const res = await fetch(`/api/summarize?videoId=${id}` + langSuffixFetch());
+async function fetchSummary(id, force) {
+  if (!force) { const c = getSum(id); if (c) return c; }
+  const res = await fetch(`/api/summarize?videoId=${id}` + langSuffixFetch() + (force ? "&refresh=1&t=" + Date.now() : ""));
   const text = await res.text();
   let d;
   try { d = JSON.parse(text); }
@@ -422,6 +425,7 @@ function recipeBodyHTML(d, m, opts = {}) {
       ${d.difficulty ? `<span>🔥 <b>${esc(d.difficulty)}</b></span>` : ""}
     </div>
     ${completeHtml}
+    <button class="re-sum">🔄 레시피 다시 정리</button>
     ${d.aiError ? `<div class="note">${esc(d.aiError)}</div>` : ""}
     ${d.debug ? `<div class="note" style="font-size:11px;opacity:.6">${esc(d.debug)}</div>` : ""}
     ${d.note ? `<div class="note">${esc(d.note)}</div>` : ""}
@@ -444,6 +448,23 @@ function recipeBodyHTML(d, m, opts = {}) {
     </div>`;
 }
 
+async function refreshRecipe(d, scope, isModal) {
+  const id = d.videoId || d._id || "";
+  if (!id) return;
+  delete sumCache[id]; store.set("rt_sum2", sumCache);
+  const body = isModal ? $("#modalBody") : scope;
+  if (body) body.innerHTML = `<div style="text-align:center;padding:50px"><span class="spinner"></span><p class="muted">영상을 다시 보고 레시피를 정리하고 있어요…</p></div>`;
+  try {
+    const nd = await fetchSummary(id, true);
+    nd._url = d._url || `https://www.youtube.com/watch?v=${id}`;
+    nd._id = id;
+    if (isModal) { modalState = { recipe: nd, mult: 1 }; renderModal(); }
+    else { scope.innerHTML = `<div class="recipe compact">${recipeBodyHTML(nd, 1, { stepper: false })}</div>`; wireRecipe(scope, nd, 1, false); }
+    toast("새로 정리했어요 ✓");
+  } catch (e) {
+    if (body) body.innerHTML = `<p class="note">⚠ ${esc(e.message)}</p>`;
+  }
+}
 function wireRecipe(scope, d, m, isModal) {
   if (isModal) {
     scope.querySelectorAll("[data-mult]").forEach(b => b.onclick = () => {
@@ -460,6 +481,8 @@ function wireRecipe(scope, d, m, isModal) {
   if (sh) sh.onclick = () => shareRecipe(d);
   const si = scope.querySelector(".cta-img");
   if (si) si.onclick = () => shareRecipeCard(d);
+  const rf = scope.querySelector(".re-sum");
+  if (rf) rf.onclick = () => refreshRecipe(d, scope, !!isModal);
 }
 
 // 저장한 영상: 오른쪽에 레시피 자동 표시

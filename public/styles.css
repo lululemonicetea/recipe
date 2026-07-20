@@ -402,3 +402,7 @@ body {
 .lang-opts { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .lang-opts button { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 17px; font-weight: 600; cursor: pointer; }
 .lang-opts button:hover { border-color: var(--brand); }
+
+/* 레시피 다시 정리 */
+.re-sum { margin: 0 0 12px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+.re-sum:hover { border-color: var(--brand); color: var(--brand); }
