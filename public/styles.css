@@ -397,3 +397,8 @@ body {
 .complete.cp-good { background: color-mix(in srgb, #16a34a 13%, transparent); color: #15803d; }
 .complete.cp-mid { background: color-mix(in srgb, #d97706 14%, transparent); color: #b45309; }
 .complete.cp-low { background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; }
+
+/* 언어 선택 */
+.lang-opts { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.lang-opts button { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 17px; font-weight: 600; cursor: pointer; }
+.lang-opts button:hover { border-color: var(--brand); }

@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   const appUrl = "/?recipe=" + encodeURIComponent(v);
   const thumb = `https://i.ytimg.com/vi/${v}/hqdefault.jpg`;
   let dish = "", servings = "", total = "";
-  try { const s = await kvGet("sum:" + v); if (s) { dish = s.dish || ""; servings = s.servings || ""; total = s.totalTime || ""; } } catch {}
+  for (const l of ["ko", "en", "es"]) { try { const s2 = await kvGet("sum:" + l + ":" + v); if (s2) { dish = s2.dish || dish; servings = s2.servings || servings; total = s2.totalTime || total; if (dish) break; } } catch {} }
   if (!dish && process.env.YOUTUBE_API_KEY) {
     try {
       const sp = new URLSearchParams({ key: process.env.YOUTUBE_API_KEY, part: "snippet", id: v });

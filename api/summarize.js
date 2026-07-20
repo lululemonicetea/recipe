@@ -36,13 +36,31 @@ async function getTranscript(videoId) {
   } catch { return ""; }
 }
 
+function cleanDescription(desc) {
+  const out = [];
+  for (const raw of (desc || "").split(/\r?\n/)) {
+    const s = raw.trim();
+    if (!s) continue;
+    if (/https?:\/\/|www\.|youtu\.?be|\.com|\.net|@[A-Za-z0-9_]/i.test(s)) continue;
+    if (/구독|좋아요|알림\s*설정|인스타|스토어|블로그|카페|문의|협찬|광고|비즈니스|이메일|메일|후원|계좌|멤버십|subscribe|follow|instagram|sponsor|business|e-?mail/i.test(s)) continue;
+    if (/^[#＃]/.test(s) || (s.match(/[#＃]/g) || []).length >= 2) continue;
+    if (/^\d{1,2}:\d{2}/.test(s)) continue;
+    out.push(s);
+  }
+  return out.join("\n").slice(0, 2200);
+}
 function buildPrompt(title, description, tags, transcript) {
-  return "당신은 요리 레시피 정리 전문가입니다. 아래 유튜브 요리 영상의 제목/설명/태그/자막을 바탕으로 "
-    + "따라 할 수 있는 레시피를 정리하세요. 정보가 없으면 지어내지 말고 비워두세요. "
-    + "ingredients에는 '재료'만(예: 대파 1대, 된장 2스푼) 넣고 조리 동작 문장은 넣지 마세요. "
-    + "steps에는 조리 순서 문장만 넣으세요. 한국어로 답하세요.\n\n"
-    + "[제목]\n" + title + "\n\n[영상 설명]\n" + (description || "").slice(0, 3000)
-    + "\n\n[태그]\n" + (tags || "(없음)") + "\n\n[자막(일부)]\n" + (transcript || "(자막 없음)");
+  const t = (transcript || "").trim();
+  const hasT = t.length > 30;
+  const desc = cleanDescription(description);
+  return "당신은 요리 레시피 정리 전문가입니다. 아래 유튜브 영상에서 '제목'에 해당하는 요리 하나의 레시피만 정리하세요.\n"
+    + "규칙:\n"
+    + "1) " + (hasT ? "자막을 최우선 근거로 삼고, 설명은 재료·분량 보완에만 사용하세요." : "제목과 명백히 관련된 재료·조리법만 사용하세요.") + "\n"
+    + "2) 설명에 들어 있는 다른 요리, 홍보, 링크, 해시태그, 타 영상/뉴스/기사 소개는 절대 사용하지 마세요.\n"
+    + "3) 확실하지 않으면 지어내지 말고, 재료·조리법을 못 찾으면 빈 배열로 두세요.\n"
+    + "4) ingredients에는 재료만(예: 대파 1대), steps에는 조리 동작 문장만.\n\n"
+    + "[제목]\n" + title + "\n\n[자막]\n" + (t || "(자막 없음)") + "\n\n[설명(참고용, 노이즈 가능)]\n" + desc
+    + "\n\n[태그]\n" + (tags || "(없음)");
 }
 
 const SCHEMA = {
@@ -55,7 +73,13 @@ const SCHEMA = {
   },
 };
 
-const KOR_SYS = { parts: [{ text: "너는 한국어로만 답하는 요리 도우미다. dish, ingredients, steps, tips의 모든 값을 반드시 자연스러운 한국어로 작성한다. 어떤 경우에도 영어 문장으로 답하지 않는다." }] };
+const SYS = {
+  ko: "너는 한국어로만 답하는 요리 도우미다. dish, ingredients, steps, tips의 모든 값을 반드시 자연스러운 한국어로 작성한다. 어떤 경우에도 영어 문장으로 답하지 않는다.",
+  en: "You are a cooking assistant. Write ALL values of dish, ingredients (item and amount), steps and tips in natural English. Never answer in another language.",
+  es: "Eres un asistente de cocina. Escribe TODOS los valores de dish, ingredients (item y amount), steps y tips en español natural. Nunca respondas en otro idioma.",
+};
+let curLang = "ko";
+function sysIns() { return { parts: [{ text: SYS[curLang] || SYS.ko }] }; }
 
 function safeJson(text) {
   const s = text.indexOf("{"), e = text.lastIndexOf("}");
@@ -85,7 +109,7 @@ async function summarizeWithGemini(title, description, tags, transcript) {
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
   const body = {
-    systemInstruction: KOR_SYS, contents: [{ parts: [{ text: buildPrompt(title, description, tags, transcript) }] }],
+    systemInstruction: sysIns(), contents: [{ parts: [{ text: buildPrompt(title, description, tags, transcript) }] }],
     generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 },
   };
   const j = await geminiFetch(endpoint, body);
@@ -152,7 +176,7 @@ async function summarizeWithGeminiVideo(videoId, durSec) {
     { fileData: { fileUri: `https://www.youtube.com/watch?v=${videoId}`, mimeType: "video/*" } },
   ];
   if (durSec > 720) parts[1].videoMetadata = { startOffset: "0s", endOffset: "720s" };
-  const body = { systemInstruction: KOR_SYS, contents: [{ parts }], generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 } };
+  const body = { systemInstruction: sysIns(), contents: [{ parts }], generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0.2, maxOutputTokens: 4096 } };
   const j = await geminiFetch(endpoint, body);
   const text = (j?.candidates?.[0]?.content?.parts || []).map(p => p.text).join("").trim();
   const data = safeJson(text.replace(/^```json\s*/i, "").replace(/```$/g, "").trim());
@@ -182,14 +206,15 @@ async function smartSummarize(videoId, title, description, tags, durSec) {
     if (vErr && !hasContent(only)) only.debug = vErr;
     return only;
   }
-  let data;
+  let data, transcript = "";
   try {
-    const transcript = await getTranscript(videoId);
+    transcript = await getTranscript(videoId);
     data = await summarizeWithGemini(title, description, tags, transcript);
   } catch {
     data = summarizeFromText(title, description);
   }
-  if (videoOn && !isFull(data)) {
+  const thinTranscript = (transcript || "").replace(/\s+/g, "").length < 150;
+  if (videoOn && (!isFull(data) || thinTranscript)) {
     try { const v = await summarizeWithGeminiVideo(videoId, durSec); if (hasContent(v)) return v; } catch (e) { vErr = cleanErr(e); }
   }
   if (vErr && !hasContent(data)) data.debug = vErr;
@@ -211,10 +236,11 @@ export default async function handler(req, res) {
   const url = new URL(req.url, "http://localhost");
   const videoId = url.searchParams.get("videoId");
   if (!videoId) return res.status(400).json({ error: "videoId가 필요합니다." });
-  const hit = cache.get(videoId);
+  const lang = (url.searchParams.get("lang") || "ko"); curLang = lang; const ck = lang + ":" + videoId;
+  const hit = cache.get(ck);
   if (hit && Date.now() - hit.at < TTL) return res.status(200).json(hit.data);
-  const kv = await kvGet("sum:" + videoId);
-  if (kv) { cache.set(videoId, { at: Date.now(), data: kv }); return res.status(200).json(kv); }
+  const kv = await kvGet("sum:" + ck);
+  if (kv) { cache.set(ck, { at: Date.now(), data: kv }); return res.status(200).json(kv); }
   try {
     const vp = new URLSearchParams({ key, part: "snippet,contentDetails", id: videoId });
     const vJson = await (await fetch(`${YT}/videos?${vp}`)).json();
@@ -240,7 +266,7 @@ export default async function handler(req, res) {
     if (noIng && noStep && !data.note) {
       data.note = "이 영상은 자막·설명이 부족해 자동으로 정리할 재료·순서를 찾지 못했어요. ‘영상에서 보기’로 확인해 주세요.";
     }
-    if (hasContent(data) && !data._partial) { cache.set(videoId, { at: Date.now(), data }); await kvSet("sum:" + videoId, data); }
+    if (hasContent(data) && !data._partial) { cache.set(ck, { at: Date.now(), data }); await kvSet("sum:" + ck, data); }
     if (data._partial) res.setHeader("Cache-Control", "no-store");
     return res.status(200).json(data);
   } catch (e) {

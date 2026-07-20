@@ -80,8 +80,11 @@ export default async function handler(req, res) {
   const q = (url.searchParams.get("q") || "").trim();
   const order = url.searchParams.get("order") || "performance";
   const pageToken = url.searchParams.get("pageToken") || "";
-  const region = process.env.REGION_CODE || "KR";
-  const lang = process.env.RELEVANCE_LANGUAGE || "ko";
+  const LOC = { ko: { rc: "KR", rl: "ko", sfx: "레시피 만들기" }, en: { rc: "US", rl: "en", sfx: "recipe" }, es: { rc: "ES", rl: "es", sfx: "receta" } };
+  const loc = LOC[(url.searchParams.get("lang") || "").toLowerCase()];
+  const region = loc ? loc.rc : (process.env.REGION_CODE || "KR");
+  const lang = loc ? loc.rl : (process.env.RELEVANCE_LANGUAGE || "ko");
+  const sfx = loc ? loc.sfx : "레시피 만들기";
   if (!q) return res.status(400).json({ error: "검색어(q)가 필요합니다." });
 
   // 유튜브 링크/영상ID → 해당 영상 하나 (search.list 할당량 소모 없음)
@@ -99,7 +102,7 @@ export default async function handler(req, res) {
     }
   }
 
-  const searchQuery = /레시피|만들기|요리|recipe/i.test(q) ? q : `${q} 레시피 만들기`;
+  const searchQuery = /레시피|만들기|요리|recipe|receta/i.test(q) ? q : `${q} ${sfx}`;
   const ytOrder = order === "latest" ? "date" : order === "relevance" ? "relevance" : "viewCount";
 
   // 캐시 키: 유튜브 호출 시그니처(ytOrder) 기준 → 성과순/조회수순이 같은 캐시 공유

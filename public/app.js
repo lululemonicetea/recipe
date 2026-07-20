@@ -13,6 +13,146 @@ let theme   = store.get("rt_theme", "light");
 let sumCache = store.get("rt_sum2", {});
 let collapsed = store.get("rt_collapsed", {});
 let currentView = "search";
+let lang = store.get("rt_lang", null);
+/* ---------- 다국어(한국어·English·Español) ---------- */
+const I18N = {
+  "검색": ["Search", "Buscar"],
+  "뭐먹지": ["What to eat", "Qué comer"],
+  "저장함": ["Saved", "Guardados"],
+  "장보기": ["Shopping", "Compras"],
+  "레시피": ["Recipe", "Receta"],
+  "튜브": ["Tube", "Tube"],
+  "메뉴 이름 또는 유튜브 링크로 검색": ["Search by dish or YouTube link", "Busca por plato o enlace de YouTube"],
+  "💡 메뉴 이름(예: 김치찌개)이나 유튜브 영상 링크를 붙여넣어 검색해보세요": ["💡 Type a dish name or paste a YouTube link to search", "💡 Escribe un plato o pega un enlace de YouTube"],
+  "정렬": ["Sort", "Orden"],
+  "관련성순(추천)": ["Relevance (recommended)", "Relevancia (recom.)"],
+  "성과순": ["Performance", "Rendimiento"],
+  "조회수순": ["Views", "Vistas"],
+  "최신순": ["Newest", "Recientes"],
+  "더 보기": ["Show more", "Ver más"],
+  "검색 결과가 없어요. 다른 검색어를 시도해 보세요.": ["No results. Try another search.", "Sin resultados. Prueba otra búsqueda."],
+  "🎲 오늘의 룰렛": ["🎲 Today's roulette", "🎲 Ruleta de hoy"],
+  "🎲 돌리기": ["🎲 Spin", "🎲 Girar"],
+  "🍳 이 레시피 보기": ["🍳 View this recipe", "🍳 Ver receta"],
+  "🎲 다시 돌리기": ["🎲 Spin again", "🎲 Girar otra vez"],
+  "최근 본 레시피": ["Recently viewed", "Vistos hace poco"],
+  "요즘 인기": ["Trending now", "Tendencias"],
+  "전체 지우기": ["Clear all", "Borrar todo"],
+  "메뉴를 불러오지 못했어요. 잠시 후 다시 시도해요": ["Couldn't load. Try again shortly.", "No se pudo cargar. Inténtalo pronto."],
+  "⭐ 저장함": ["⭐ Saved", "⭐ Guardados"],
+  "아직 저장한 영상이 없어요. 검색 결과에서 별표(☆)를 눌러 저장해 보세요.": ["No saved videos yet. Tap the star (☆) on a result to save.", "Aún no hay vídeos. Toca la estrella (☆) para guardar."],
+  "⭐ 저장한 영상": ["⭐ Your saved videos", "⭐ Tus vídeos guardados"],
+  "이 메뉴로 저장해둔 영상이에요": ["Videos you saved for this dish", "Vídeos guardados para este plato"],
+  "👪 우리집 공유": ["👪 Family share", "👪 Compartir en familia"],
+  "🛒 장보기 목록": ["🛒 Shopping list", "🛒 Lista de compras"],
+  "재료 줄을 누르면 '있음(준비완료)'으로 체크돼요. 체크 안 한 재료는 아래 버튼으로 쿠팡에서 살 수 있어요.": ["Tap an item to mark it as 'have it'. Unchecked items can be bought on Coupang below.", "Toca un ingrediente para marcarlo como 'lo tengo'. Los no marcados se compran abajo."],
+  "재료 직접 추가 (예: 대파 1대)": ["Add an item (e.g., 1 green onion)", "Añadir (ej. 1 cebolleta)"],
+  "추가": ["Add", "Añadir"],
+  "✓ 전체 완료": ["✓ Mark all", "✓ Marcar todo"],
+  "▾ 모두 접기": ["▾ Collapse all", "▾ Contraer"],
+  "📋 복사": ["📋 Copy", "📋 Copiar"],
+  "↗ 공유": ["↗ Share", "↗ Compartir"],
+  "✔ 완료 항목 삭제": ["✔ Remove done", "✔ Quitar hechos"],
+  "전체 비우기": ["Clear all", "Vaciar todo"],
+  "🛒 쿠팡에서 재료 구매하기": ["🛒 Buy ingredients on Coupang", "🛒 Comprar en Coupang"],
+  "개인정보처리방침": ["Privacy policy", "Política de privacidad"],
+  "🍽 오늘 뭐 먹지?": ["🍽 What to eat today?", "🍽 ¿Qué comemos hoy?"],
+  "원하는 방식을 열어서 골라보세요.": ["Open a section to choose.", "Abre una sección para elegir."],
+  "🍽 상황별": ["🍽 By situation", "🍽 Por situación"],
+  "🧊 냉장고 파먹기": ["🧊 Use up the fridge", "🧊 Vaciar la nevera"],
+  "📂 카테고리": ["📂 Categories", "📂 Categorías"],
+  "가진 재료 입력 (예: 애호박, 참치)": ["Enter ingredients you have (e.g., zucchini, tuna)", "Ingredientes que tienes (ej. calabacín, atún)"],
+  "🧺 재료": ["🧺 Ingredients", "🧺 Ingredientes"],
+  "👩‍🍳 조리 순서": ["👩‍🍳 Steps", "👩‍🍳 Pasos"],
+  "💡 팁": ["💡 Tips", "💡 Consejos"],
+  "▶ 영상에서 보기": ["▶ Watch video", "▶ Ver vídeo"],
+  "🍳 조리 시작": ["🍳 Start cooking", "🍳 Empezar"],
+  "🛒 장보기 담기": ["🛒 Add to list", "🛒 Añadir a lista"],
+  "🖼 이미지": ["🖼 Image", "🖼 Imagen"],
+  "AI 영상 분석": ["AI video analysis", "Análisis de vídeo IA"],
+  "AI 요약": ["AI summary", "Resumen IA"],
+  "설명 기반": ["From description", "De la descripción"],
+  "정보 충실": ["Complete info", "Info completa"],
+  "정보 일부": ["Partial info", "Info parcial"],
+  "계량 정보 부족 · 영상 확인 권장": ["Amounts missing · check video", "Faltan cantidades · revisa el vídeo"],
+  "영상을 보고 재료·조리법을 정리하고 있어요…": ["Watching the video and organizing the recipe…", "Analizando el vídeo y la receta…"],
+  "🔥 맛보장": ["🔥 Crowd favorite", "🔥 Favorito"],
+  "👍 평 좋음": ["👍 Well rated", "👍 Bien valorado"],
+  "이전": ["Prev", "Anterior"],
+  "다음": ["Next", "Siguiente"],
+  "완료": ["Done", "Listo"],
+  "시작하기": ["Get started", "Empezar"],
+  "나중에": ["Later", "Luego"],
+  "평점 남기기": ["Rate the app", "Valorar app"],
+  "새 우리집 만들기": ["Create a family space", "Crear espacio familiar"],
+  "참여하기": ["Join", "Unirse"],
+  "코드 복사": ["Copy code", "Copiar código"],
+  "지금 동기화": ["Sync now", "Sincronizar"],
+  "이 기기 연결 끊기": ["Disconnect this device", "Desconectar este equipo"],
+  "또는 받은 코드로": ["Or with a code", "O con un código"],
+  "⭐ 저장했어요! 다음에 비슷한 메뉴를 검색하면 맨 위에 나와요": ["⭐ Saved! It'll appear on top for similar searches.", "⭐ ¡Guardado! Aparecerá arriba en búsquedas similares."],
+  "복사했어요 — 붙여넣어 공유하세요": ["Copied — paste to share", "Copiado — pega para compartir"],
+  "목록을 복사했어요": ["List copied", "Lista copiada"],
+  "목록이 비어 있어요": ["The list is empty", "La lista está vacía"],
+  "담을 재료가 없어요": ["Nothing to add", "Nada que añadir"],
+  "가진 재료를 입력하거나 선택하세요": ["Enter or pick ingredients you have", "Escribe o elige ingredientes"],
+  "코드를 복사했어요": ["Code copied", "Código copiado"],
+  "우리집에 연결됐어요 ✓": ["Connected ✓", "Conectado ✓"],
+  "동기화했어요 ✓": ["Synced ✓", "Sincronizado ✓"],
+  "코드를 입력하세요": ["Enter a code", "Escribe un código"],
+  "코드를 찾을 수 없어요. 다시 확인해 주세요": ["Code not found. Please check.", "Código no encontrado. Revísalo."],
+  "우리집 연결을 끊었어요": ["Disconnected", "Desconectado"],
+  "이미지를 저장했어요 — 공유해보세요": ["Image saved — share it", "Imagen guardada — compártela"],
+  "영상이 길어 요약이 오래 걸려요. 잠시 후 다시 시도하거나 ‘영상에서 보기’로 확인해 주세요.": ["This video is long, so the summary is slow. Try again soon or use 'Watch video'.", "El vídeo es largo y el resumen tarda. Reinténtalo o usa 'Ver vídeo'."],
+};
+const I18N_PAT = [
+  [/^“(.+)”\s*성과 좋은 순 상위 영상$/, q => `Top videos for “${q}”`, q => `Mejores vídeos de “${q}”`],
+  [/^🍳 이 재료로 레시피 찾기(?:\s*\((\d+)\))?$/, n => "🍳 Find recipes" + (n ? ` (${n})` : ""), n => "🍳 Buscar recetas" + (n ? ` (${n})` : "")],
+  [/^우리집 (\S+) · 연결됨$/, c => `Family ${c} · connected`, c => `Familia ${c} · conectado`],
+];
+function trText(v) {
+  if (!v || !lang || lang === "ko") return v;
+  const k = v.trim(); if (!k) return v;
+  const idx = lang === "es" ? 1 : 0;
+  const hit = I18N[k];
+  if (hit && hit[idx]) return v.replace(k, hit[idx]);
+  for (const p of I18N_PAT) { const m = k.match(p[0]); if (m) { const f = p[idx + 1]; if (f) return v.replace(k, f(m[1] || "")); } }
+  return v;
+}
+const I18N_ATTR = ["placeholder", "title", "aria-label"];
+function translateEl(root) {
+  if (!lang || lang === "ko" || !root) return;
+  try {
+    if (root.nodeType === 3) { const nv = trText(root.nodeValue); if (nv !== root.nodeValue) root.nodeValue = nv; return; }
+    if (root.nodeType !== 1) return;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    const tn = []; let n; while (n = w.nextNode()) tn.push(n);
+    tn.forEach(t => { const nv = trText(t.nodeValue); if (nv !== t.nodeValue) t.nodeValue = nv; });
+    const els = [root, ...root.querySelectorAll("*")];
+    els.forEach(e => { I18N_ATTR.forEach(a => { if (e.hasAttribute && e.hasAttribute(a)) { const nv = trText(e.getAttribute(a)); if (nv !== e.getAttribute(a)) e.setAttribute(a, nv); } }); });
+  } catch (e) {}
+}
+let i18nMo = null;
+function applyLang() {
+  document.documentElement.setAttribute("lang", lang || "ko");
+  if (i18nMo) { i18nMo.disconnect(); i18nMo = null; }
+  if (!lang || lang === "ko") return;
+  translateEl(document.body);
+  i18nMo = new MutationObserver(ms => { for (const m of ms) m.addedNodes && m.addedNodes.forEach(nd => translateEl(nd)); });
+  i18nMo.observe(document.body, { childList: true, subtree: true });
+}
+function showLangPicker(first) {
+  const ov = el("div", "onboard lang-pick");
+  ov.innerHTML = `<div class="ob-card"><div class="ob-emoji">🌐</div><h2>Language · 언어 · Idioma</h2><div class="lang-opts"><button data-lang="ko">🇰🇷 한국어</button><button data-lang="en">🇺🇸 English</button><button data-lang="es">🇪🇸 Español</button></div></div>`;
+  document.body.appendChild(ov); pushOverlay();
+  ov.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
+    lang = b.dataset.lang; store.set("rt_lang", lang); ov.remove(); try { window.history.back(); } catch {}
+    applyLang();
+    if (first) showOnboarding();
+  });
+}
+function langSuffixFetch() { return "&lang=" + (lang || "ko"); }
+
 
 /* ---------- 유틸 ---------- */
 const $ = s => document.querySelector(s);
@@ -86,7 +226,7 @@ async function doSearch(query, append = false) {
   status.innerHTML = '<span class="spinner"></span>';
   $("#moreBtn").classList.add("hidden");
   try {
-    const url = `/api/search?q=${encodeURIComponent(q)}&order=${order}` + (append && nextPageToken ? `&pageToken=${nextPageToken}` : "");
+    const url = `/api/search?q=${encodeURIComponent(q)}&order=${order}` + (append && nextPageToken ? `&pageToken=${nextPageToken}` : "") + langSuffixFetch();
     const res = await fetch(url);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "검색 실패");
@@ -222,7 +362,7 @@ function putSum(id, data) {
 }
 async function fetchSummary(id) {
   const c = getSum(id); if (c) return c;
-  const res = await fetch(`/api/summarize?videoId=${id}`);
+  const res = await fetch(`/api/summarize?videoId=${id}` + langSuffixFetch());
   const text = await res.text();
   let d;
   try { d = JSON.parse(text); }
@@ -641,7 +781,7 @@ async function loadTrending() {
   const cache = store.get("rt_trend", null);
   if (cache && cache.day === today && cache.items) return cache.items;
   try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&order=views`);
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&order=views` + langSuffixFetch());
     const data = await res.json();
     if (res.ok && data.items && data.items.length) { const seed = +(today.replace(/-/g, "")); const items = seededShuffle(data.items.slice(0, 16), seed).slice(0, 8); store.set("rt_trend", { day: today, items }); return items; }
   } catch {}
@@ -673,7 +813,7 @@ async function loadRoulettePool() {
   const queries = ["인기 요리 레시피", "백종원 요리", "간단 저녁 요리", "자취 요리 레시피", "집밥 레시피", "맛있는 요리 레시피"];
   const idx = (now.getDate() * 2 + (now.getHours() < 12 ? 0 : 1)) % queries.length;
   try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(queries[idx])}&order=views`);
+    const res = await fetch(`/api/search?q=${encodeURIComponent(queries[idx])}&order=views` + langSuffixFetch());
     const data = await res.json();
     if (res.ok && data.items && data.items.length) { roulettePool = data.items.slice(0, 20); store.set("rt_roulette", { slot, items: roulettePool }); return roulettePool; }
   } catch {}
@@ -868,7 +1008,7 @@ async function loadCommentSignals(ids) {
   const need = ids.filter(id => !tasteCache.has(id));
   if (!need.length) return;
   try {
-    const r = await fetch("/api/comments?ids=" + encodeURIComponent(need.join(",")));
+    const r = await fetch("/api/comments?ids=" + encodeURIComponent(need.join(",")) + langSuffixFetch());
     if (!r.ok) return;
     const d = await r.json();
     const sig = d.signals || {};
@@ -984,7 +1124,8 @@ function openSpacePanel() { renderSpacePanel(); $("#modal").classList.remove("hi
 /* ---------- 초기화 ---------- */
 applyTheme(); updateCounts(); renderHistory(); showHome();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
-showOnboarding();
+if (!lang) { showLangPicker(true); } else { applyLang(); showOnboarding(); }
+$("#langToggle").onclick = () => showLangPicker(false);
 { const p = new URLSearchParams(location.search); if (p.get("recipe")) openRecipe(p.get("recipe")); else if (p.get("q")) doSearch(p.get("q")); }
 document.querySelectorAll(".space-btn").forEach(b => b.onclick = openSpacePanel);
 updateSpaceStatus();
