@@ -13,6 +13,10 @@
     {
       "source": "/r/:v",
       "destination": "/api/share?v=:v"
+    },
+    {
+      "source": "/stats",
+      "destination": "/api/stats"
     }
   ],
   "headers": [

@@ -149,12 +149,21 @@ function showLangPicker(first) {
   ov.innerHTML = `<div class="ob-card"><div class="ob-emoji">🌐</div><h2>Language · 언어 · Idioma</h2><div class="lang-opts"><button data-lang="ko">🇰🇷 한국어</button><button data-lang="en">🇺🇸 English</button><button data-lang="es">🇪🇸 Español</button></div></div>`;
   document.body.appendChild(ov); pushOverlay();
   ov.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
-    lang = b.dataset.lang; store.set("rt_lang", lang); ov.remove(); try { window.history.back(); } catch {}
+    lang = b.dataset.lang; store.set("rt_lang", lang); track("lang_set"); ov.remove(); try { window.history.back(); } catch {}
     applyLang();
     if (first) showOnboarding();
   });
 }
 function langSuffixFetch() { return "&lang=" + (lang || "ko"); }
+let deviceId = store.get("rt_did", null);
+if (!deviceId) { deviceId = uid() + uid(); store.set("rt_did", deviceId); }
+function track(e) {
+  try {
+    const body = JSON.stringify({ e, d: deviceId, lang: lang || "ko" });
+    if (navigator.sendBeacon) navigator.sendBeacon("/api/track", new Blob([body], { type: "application/json" }));
+    else fetch("/api/track", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  } catch (e2) {}
+}
 
 
 /* ---------- 유틸 ---------- */
@@ -214,7 +223,7 @@ function isSaved(id) { return saved.some(s => s.id === id); }
 async function doSearch(query, append = false) {
   const q = (query ?? $("#q").value).trim();
   if (!q) return;
-  currentQuery = q;
+  currentQuery = q; track("search");
   $("#q").value = q;
   hideHome();
   if (!append) {
@@ -326,6 +335,7 @@ function toggleStar(id, btn) {
     saved = saved.filter(s => s.id !== id);
     toast("저장 해제했어요");
   } else if (v) {
+    track("save");
     saved.unshift({
       id: v.id, title: v.title, channel: v.channel, thumbnail: v.thumbnail,
       url: v.url, durationText: v.durationText, viewCount: v.viewCount, publishedAt: v.publishedAt,
@@ -378,7 +388,7 @@ async function fetchSummary(id, force) {
 async function openRecipe(id) {
   const v = lastResults.get(id);
   trackRecent(v);
-  maybeRatePrompt();
+  maybeRatePrompt(); track("recipe");
   $("#modal").classList.remove("hidden");
   document.body.style.overflow = "hidden";
   pushOverlay();
@@ -449,6 +459,7 @@ function recipeBodyHTML(d, m, opts = {}) {
 }
 
 async function refreshRecipe(d, scope, isModal) {
+  track("refresh");
   const id = d.videoId || d._id || "";
   if (!id) return;
   delete sumCache[id]; store.set("rt_sum2", sumCache);
@@ -510,7 +521,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal()
 
 /* ---------- 장보기 ---------- */
 function addIngredientsToCart(ing, src, mult) {
-  let added = 0;
+  track("cart"); let added = 0;
   ing.forEach(i => {
     const name = (i.item || "").trim();
     const text = `${name} ${scaleAmount(i.amount, mult) || ""}`.trim();
@@ -631,6 +642,7 @@ async function openCoupang() {
 function goCoupang(names) {
   names = [...new Set((names || []).filter(Boolean))];
   if (!names.length) return toast("담을 재료가 없어요");
+  track("coupang");
   const w = window.open("about:blank", "_blank");
   if (navigator.clipboard) navigator.clipboard.writeText(names.join("\n")).catch(() => {});
   const fallback = `https://www.coupang.com/np/search?q=${encodeURIComponent(names[0])}`;
@@ -776,6 +788,7 @@ async function shareText(title, text, url) {
   catch { toast("이 환경에선 공유가 어려워요"); }
 }
 function shareRecipe(d) {
+  track("share");
   const id = d.videoId || d._id || "";
   const url = id ? `${location.origin}/r/${id}` : (d._url || location.origin);
   const info = []; if (d.servings) info.push("👥 " + d.servings); if (d.totalTime) info.push("⏱ " + d.totalTime);
@@ -857,7 +870,7 @@ async function spinRoulette() {
     delay *= 1.14;
     if (delay < 340) { setTimeout(step, delay); return; }
     let pick; do { pick = pool[Math.floor(Math.random() * pool.length)]; } while (pool.length > 1 && pick === rlLast);
-    rlLast = pick; lastResults.set(pick.id, pick);
+    rlLast = pick; lastResults.set(pick.id, pick); track("roulette");
     if (disp) { disp.innerHTML = rouletteCardHtml(pick); const card = disp.querySelector(".rl-card"); if (card) { card.classList.add("rl-win"); card.onclick = () => openRecipe(pick.id); } }
     if (rec) { rec.innerHTML = `<button class="rl-open" id="rlOpen">🍳 이 레시피 보기</button><button class="rl-again" id="rlAgain">🎲 다시 돌리기</button>`; const o = $("#rlOpen"); if (o) o.onclick = () => openRecipe(pick.id); const ag = $("#rlAgain"); if (ag) ag.onclick = spinRoulette; }
     rlSpinning = false; if (btn) btn.disabled = false;
@@ -1097,7 +1110,7 @@ async function spacePull() {
 function spaceStartPolling() { clearInterval(spacePolling); if (spaceCode) spacePolling = setInterval(spacePull, 15000); }
 async function spaceCreate() {
   const j = await spaceApi("POST", "", { action: "create" });
-  spaceCode = j.code; store.set("rt_space", spaceCode);
+  spaceCode = j.code; store.set("rt_space", spaceCode); track("family");
   spaceRev = 0; store.set("rt_space_rev", 0);
   await spacePush();
   spaceStartPolling();
@@ -1145,7 +1158,7 @@ function renderSpacePanel() {
 function openSpacePanel() { renderSpacePanel(); $("#modal").classList.remove("hidden"); document.body.style.overflow = "hidden"; pushOverlay(); }
 
 /* ---------- 초기화 ---------- */
-applyTheme(); updateCounts(); renderHistory(); showHome();
+applyTheme(); updateCounts(); renderHistory(); showHome(); track("open");
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 if (!lang) { showLangPicker(true); } else { applyLang(); showOnboarding(); }
 $("#langToggle").onclick = () => showLangPicker(false);
