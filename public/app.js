@@ -156,7 +156,7 @@ function showLangPicker(first) {
 }
 function langSuffixFetch() { return "&lang=" + (lang || "ko"); }
 let deviceId = store.get("rt_did", null);
-if (!deviceId) { deviceId = uid() + uid(); store.set("rt_did", deviceId); }
+if (!deviceId) { deviceId = Date.now().toString(36) + Math.random().toString(36).slice(2, 12); store.set("rt_did", deviceId); }
 function track(e) {
   try {
     const body = JSON.stringify({ e, d: deviceId, lang: lang || "ko" });
